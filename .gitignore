@@ -2,3 +2,5 @@
 */__pycache__
 *.pyc
 *.db
+/token.txt
+/log_notify.txt

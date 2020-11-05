@@ -10,59 +10,51 @@ import requests_async as requests
 
 from datetime import datetime
 from hashlib import md5
-from common.config import db_filename, db_login, db_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, EGE_LOGIN_URL, \
-    db_regions_filename, db_reg_users, db_regions
+from config import db_users_filename, db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, EGE_LOGIN_URL, \
+    db_regions_filename, db_table_regions
 from sqlite_utils import Database
 from sqlite_utils.db import NotFoundError
 from json.decoder import JSONDecodeError
-from aiogram import Bot, types, exceptions
+from aiogram import types, exceptions
 
-db = Database(db_filename)
-users_table = db.table(db_users)
-login_table = db.table(db_login)
+db_users = Database(db_users_filename)
+users_table = db_users.table(db_table_users)
+login_table = db_users.table(db_table_login)
 
-db_exams = Database(db_regions_filename)
-
-reg_users_table = db_exams.table(db_reg_users)
-regions_table = db_exams.table(db_regions)
+db_regions = Database(db_regions_filename)
+regions_table = db_regions.table(db_table_regions)
 
 
 def db_init():
     if not users_table.exists():
         users_table.create({
             "chat_id": int,
-            "region": str,
+            "region": int,
+            "notify": int,
             "token": str,
             "login_date": int,
+            "exams": str,
             "exams_hash": str,
             "exams_date": int
-        }, pk="chat_id", not_null={"region", "token"})
+        }, pk="chat_id", not_null={"region", "token", "notify"}, defaults={"notify": 1})
         logging.log(logging.WARNING, "Users.db->users was created")
     if not login_table.exists():
         login_table.create({
             "chat_id": int,
             "status": str,
             "name": str,
-            "region": str,
+            "region": int,
             "passport": str,
             "captcha_token": str,
             "captcha_answer": str
         }, pk="chat_id", not_null={"status"})
         logging.log(logging.WARNING, "Users.db->login was created")
 
-    if not reg_users_table.exists():
-        reg_users_table.create({
-            "chat_id": int,
-            "region": int,
-            "notify": int,
-            "exams": str
-        }, pk="chat_id", not_null={"region", "notify"}, defaults={"notify": 0})
-        logging.log(logging.WARNING, "Regions.db->users was created")
-
     if not regions_table.exists():
         regions_table.create({
             "region": int,
-            "exams": str
+            "exams": str,
+            "notified_exams": str
         }, pk="region")
         logging.log(logging.WARNING, "Regions.db->regions was created")
 
@@ -71,10 +63,9 @@ def table_count():
     try:
         users_count = users_table.count
         login_count = login_table.count
-        reg_users_count = reg_users_table.count
 
-        return "U: %d, L: %d, R: %d, Server time: %s" % (
-            users_count, login_count, reg_users_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
+        return "U: %d, L: %d, Server time: %s" % (
+            users_count, login_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
     except Exception as e:
         return str(e)
 
@@ -113,7 +104,7 @@ def user_get_login_status(chat_id):
 def user_get_notify_status(chat_id):
     try:
         if user_check_logged(chat_id):
-            return reg_users_table.get(chat_id)["notify"]
+            return users_table.get(chat_id)["notify"]
     except NotFoundError:
         return None
 
@@ -121,7 +112,6 @@ def user_get_notify_status(chat_id):
 def user_clear(chat_id):
     try:
         users_table.delete(chat_id)
-        reg_users_table.delete(chat_id)
         return True
     except NotFoundError:
         return False
@@ -136,7 +126,9 @@ def user_login_stop(chat_id):
 
 
 def user_login_start(chat_id):
+    user_clear(chat_id)
     user_login_stop(chat_id)
+
     login_table.insert({
         "chat_id": chat_id,
         "status": "name"
@@ -161,7 +153,7 @@ def user_login_setRegion(chat_id, region):
     if len(region) == 2 and region.isdigit():
         login_table.update(chat_id, {
             "status": "passport",
-            "region": region
+            "region": int(region)
         })
         return True
     else:
@@ -195,6 +187,22 @@ def user_get_token(chat_id):
         return users_table.get(chat_id)["token"]
     except NotFoundError:
         return None
+
+
+def user_get_region(chat_id):
+    try:
+        return users_table.get(chat_id)["region"]
+    except NotFoundError:
+        return None
+
+
+def regions_update_exams(region, response):
+    exams = set()
+    for exam in response:
+        exams.add(exam["ExamId"])
+
+    old_regions_exams = set(regions_table.get(region)["exams"])
+    regions_table.update(region, {"exams": str(list(old_regions_exams.union(exams)))})
 
 
 def handle_captchaDelete(chat_id):
@@ -244,13 +252,16 @@ async def handle_login(chat_id):
             "chat_id": chat_id,
             "region": user["region"],
             "token": token,
+            "notify": 1,
+            "exams": "[]",
             "login_date": int(datetime.now().timestamp())
         })
-        reg_users_table.insert({
-            "chat_id": chat_id,
-            "region": int(user["region"]),
-            "notify": 1
+        regions_table.insert({
+            "region": user["region"],
+            "exams": "[]",
+            "notified_exams": "[]"
         })
+
         login_table.delete(chat_id)
         return int(response.status_code)
     except KeyError:
@@ -304,41 +315,44 @@ def check_threshold(mark, mark_threshold, title):
         return " ✅" if mark >= mark_threshold else "❗️(порог не пройден)"
 
 
-# check whether result changed (True/False)
-# runs mailer if needed
-def pass_results_db(chat_id, response, callback_bot=None, change_db=True):
+# проверка на наличие обновлений с прошлой проверки
+# запускает рассылку, если необходимо
+def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
     try:
-        # update hash in users.db
+        # update hash (and exams list) in 'users.db'
         user = users_table.get(chat_id)
-        region = user["region"]
         old_hash = user["exams_hash"]
+        region = user["region"]
+
         new_hash = md5(str(response).encode()).hexdigest()
-        if change_db:
+        exams = set()
+        for exam in response:
+            exams.add(exam["ExamId"])
+
+        if is_user_request and (not old_hash or old_hash != new_hash):
             users_table.update(chat_id, {
+                "exams": str(list(exams)),
                 "exams_hash": new_hash,
                 "exams_date": int(datetime.now().timestamp())
             })
 
-        # update exams in reg_users
-        exams = []
-        for exam in response:
-            exams.append(exam["ExamId"])
-        reg_users_table.update(chat_id, {"exams": str(exams)})
-
-        if old_hash != new_hash and old_hash:
-            if change_db:
-                on_response_change(response, int(region), chat_id, callback_bot)
+        if old_hash != new_hash:    # результаты обновились
+            if is_user_request:
+                on_results_updated(response, region, chat_id, callback_bot)
             else:
-                on_response_change(response, int(region), 1, callback_bot)
+                on_results_updated(response, region, 1, callback_bot)
             return True
         else:
             return False
+
+
+
     except NotFoundError:  # user logged out
         logging.log(logging.WARNING, "User: %d results after log out" % chat_id)
         return 0
 
 
-def on_response_change(response, region, from_id=1, callback_bot=None):
+def on_results_updated(response, region, except_from_id=1, callback_bot=None):
     for exam in response:
         title = exam["Subject"]
         exam_id = exam["ExamId"]
@@ -348,21 +362,20 @@ def on_response_change(response, region, from_id=1, callback_bot=None):
         has_result = exam["HasResult"]
         mark = exam["TestMark"]
 
-        thrown = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 178, 179, 180, 181, 308, 182, 310, 186, 196,
-                  197, 198, 199, 200, 201, 202, 203, 331, 333, 335, 250]
+        thrown = []
 
         if (has_result and not is_hidden) or int(mark):  # есть ли результат
             if exam_id not in thrown and not is_composition:  # проверка на thrown/composition
-                region_exams = ast.literal_eval(regions_table.get(region)["exams"])
+                region_exams = set(ast.literal_eval(regions_table.get(region)["exams"]))
                 if exam_id not in region_exams:  # проверка на существующее оповещение
-                    region_exams.append(exam_id)
-                    regions_table.update(region, {"exams": str(region_exams)})
+                    region_exams.add(exam_id)
+                    regions_table.update(region, {"exams": str(list(region_exams))})
 
                     logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
-                    asyncio.create_task(run_mailer(region, title, exam_id, from_id, bot=callback_bot))
+                    asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
 
 
-async def run_mailer(region, subject, subject_id, from_id=1, bot=None):
+async def run_mailer(region, subject, subject_id, except_from_id=1, bot=None):
     logging.log(logging.WARNING, "MAILER STARTED %d %s" % (region, subject))
     time = datetime.now().timestamp()
     users_count = 0
@@ -374,7 +387,7 @@ async def run_mailer(region, subject, subject_id, from_id=1, bot=None):
     markup = types.InlineKeyboardMarkup().add(markup_button1)
     message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % subject.upper()
 
-    for user in reg_users_table.rows_where("region = ? AND notify = 1", [region]):
+    for user in users_table.rows_where("region = ? AND notify = 1", [region]):
         chat_id = user["chat_id"]
         if bot:
             try:
@@ -383,7 +396,7 @@ async def run_mailer(region, subject, subject_id, from_id=1, bot=None):
                     user_exams = ast.literal_eval(user_exams_string)
                 else:
                     user_exams = []
-                if chat_id != from_id and subject_id in user_exams:
+                if chat_id != except_from_id and subject_id in user_exams:
                     try:
                         users_count += 1
                         await bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
@@ -412,7 +425,7 @@ async def run_mailer(region, subject, subject_id, from_id=1, bot=None):
 def parse_results_message(chat_id, response, is_first, callback_bot=None):
     time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
 
-    updates = pass_results_db(chat_id, response, callback_bot)
+    updates = check_results_updates(chat_id, response, callback_bot)
 
     mark_sum = 0
     show_sum = True

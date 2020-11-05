@@ -1,5 +1,6 @@
 from aiogram import types
-from common import utils
+import utils
+
 
 # ReplyKeyboardMarkup mockups:
 def markup_logged(chat_id):

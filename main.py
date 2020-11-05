@@ -1,12 +1,12 @@
-import ast
 import asyncio
 import logging
-from datetime import datetime
+import auto_checker
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter, BotBlocked, \
-    ChatNotFound
+from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter
 
-from common import strings, utils, config, buttons
+from common import strings, buttons
+import config
+import utils
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,32 +16,6 @@ dp = Dispatcher(bot)
 
 # Initialize database
 utils.db_init()
-
-
-async def check_thread_runner(exam_id):
-    logging.log(logging.INFO, "Checker: started")
-    while True:
-        for exam in exam_id:
-            time = datetime.now().timestamp()
-            regions = set()
-            for user in utils.reg_users_table.rows_where("exams IS NOT NULL"):
-                try:
-                    chat_id = user["chat_id"]
-                    user_exams = ast.literal_eval(user["exams"])
-                    user_region = user["region"]
-
-                    if user_region not in regions and exam in user_exams and utils.user_check_logged(chat_id):
-                        response = await utils.handle_get_results_json(chat_id, logs=False)
-                        await asyncio.sleep(0.5)
-
-                        if not response[0] and len(response[1]):
-                            regions.add(user_region)
-                            utils.pass_results_db(chat_id, response[1], callback_bot=bot, change_db=False)
-                except:
-                    pass
-            time_stop = datetime.now().timestamp()
-            logging.log(logging.INFO,
-                        "Checker: loop with %d regions, exam %d, time %f" % (len(regions), exam, time_stop - time))
 
 
 # Captcha handler:
@@ -65,7 +39,6 @@ async def handle_send_captcha(chat_id):
 async def handle_send_results(chat_id, is_first=False):
     if utils.user_check_logged(chat_id):
         try:
-            # await bot.send_message(chat_id, "Пожалуйста, подождите...", reply_markup=markup_logged(chat_id))
             response = await utils.handle_get_results_json(chat_id)
 
             if response[0] and response[0] != 1:  # throws Error
@@ -79,7 +52,9 @@ async def handle_send_results(chat_id, is_first=False):
             elif response[0] != 1:  # response is Null
                 await bot.send_message(chat_id, "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже!")
 
-            # MAILER INFO
+            if is_first:
+                region = utils.user_get_region(chat_id)
+                utils.regions_update_exams(region, response)
         except RetryAfter:
             logging.log(logging.WARNING, "User: %d FLOOD CONTROL" % chat_id)
 
@@ -159,13 +134,6 @@ async def check_request(message: types.Message):
 @dp.message_handler(commands=['version'])
 async def check_request(message: types.Message):
     await message.answer(config.VERSION_BUILD)
-
-
-@dp.message_handler(commands=['deprecated.runner'])
-async def check_request(message: types.Message):
-    exams = [20, 25]
-    await message.answer("runner ok %s" % str(exams))
-    await check_thread_runner(exams)
 
 
 # Button callbacks:
@@ -268,7 +236,7 @@ async def process_callback_login_retry(callback_query: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data == 'notify_on')
 async def process_callback_notify_on(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
-    utils.reg_users_table.update(chat_id, {"notify": 1})
+    utils.users_table.update(chat_id, {"notify": 1})
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(chat_id, strings.login_notify_on, reply_markup=buttons.markup_logged(chat_id))
 
@@ -320,13 +288,13 @@ async def btn_clear(message: types.Message):
 
 @dp.message_handler(regexp='Включить уведомления')
 async def btn_notify_on(message: types.Message):
-    utils.reg_users_table.update(message.chat.id, {"notify": 1})
+    utils.users_table.update(message.chat.id, {"notify": 1})
     await message.answer(strings.login_notify_on, reply_markup=buttons.markup_logged(message.chat.id))
 
 
 @dp.message_handler(regexp='Выключить уведомления')
 async def btn_notify_off(message: types.Message):
-    utils.reg_users_table.update(message.chat.id, {"notify": 0})
+    utils.users_table.update(message.chat.id, {"notify": 0})
     await message.answer(strings.login_notify_off, reply_markup=buttons.markup_logged(message.chat.id))
 
 
@@ -413,4 +381,7 @@ async def echo(message: types.Message):
 
 
 if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    # loop.create_task(auto_checker.check_thread_runner([20, 24], bot))
+
     executor.start_polling(dp, skip_updates=True)
