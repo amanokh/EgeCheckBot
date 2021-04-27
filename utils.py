@@ -10,8 +10,9 @@ import requests_async as requests
 
 from datetime import datetime
 from hashlib import md5
-from config import db_users_filename, db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, EGE_LOGIN_URL, \
-    db_regions_filename, db_table_regions
+from config import db_users_filename, db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
+    EGE_LOGIN_URL, \
+    db_regions_filename, db_table_regions, db_examsinfo_filename, db_table_examsinfo
 from sqlite_utils import Database
 from sqlite_utils.db import NotFoundError
 from json.decoder import JSONDecodeError
@@ -23,6 +24,9 @@ login_table = db_users.table(db_table_login)
 
 db_regions = Database(db_regions_filename)
 regions_table = db_regions.table(db_table_regions)
+
+db_examsinfo = Database(db_examsinfo_filename)
+examsinfo_table = db_examsinfo.table(db_table_examsinfo)
 
 
 def db_init():
@@ -55,8 +59,17 @@ def db_init():
             "region": int,
             "exams": str,
             "notified_exams": str
-        }, pk="region")
+        }, pk="region", defaults={"exams": "[]", "notified_exams": "[]"})
         logging.log(logging.WARNING, "Regions.db->regions was created")
+    if not examsinfo_table.exists():
+        examsinfo_table.create({
+            "exam_id": int,
+            "title": str,
+            "exam_date": str,
+            "res_date_official": str,
+            "res_date_predicted": str
+        }, pk="exam_id", not_null={"title", "exam_date"})
+        logging.log(logging.WARNING, "Exams_info.db->exams_info was created")
 
 
 def table_count():
@@ -197,12 +210,31 @@ def user_get_region(chat_id):
 
 
 def regions_update_exams(region, response):
-    exams = set()
+    try:
+        exams = set(ast.literal_eval(regions_table.get(region)["exams"]))
+    except NotFoundError:
+        exams = set()
+
     for exam in response:
         exams.add(exam["ExamId"])
 
-    old_regions_exams = set(regions_table.get(region)["exams"])
-    regions_table.update(region, {"exams": str(list(old_regions_exams.union(exams)))})
+    regions_table.upsert({"region": region, "exams": str(list(exams))}, pk="region")
+
+
+def examsinfo_update(response):
+    for exam in response:
+        exam_id = exam["ExamId"]
+        title = exam["Subject"]
+        exam_date = exam["ExamDate"]
+
+        try:
+            examsinfo_table.get(exam_id)
+        except NotFoundError:
+            examsinfo_table.insert({
+                "exam_id": exam_id,
+                "title": title,
+                "exam_date": exam_date
+            })
 
 
 def handle_captchaDelete(chat_id):
@@ -247,7 +279,6 @@ async def handle_login(chat_id):
         session = requests.Session()
         response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
         token = session.cookies.get_dict()["Participant"]
-
         users_table.insert({
             "chat_id": chat_id,
             "region": user["region"],
@@ -256,14 +287,9 @@ async def handle_login(chat_id):
             "exams": "[]",
             "login_date": int(datetime.now().timestamp())
         })
-        regions_table.insert({
-            "region": user["region"],
-            "exams": "[]",
-            "notified_exams": "[]"
-        })
 
         login_table.delete(chat_id)
-        return int(response.status_code)
+        return 204
     except KeyError:
         return 450
     except NotFoundError:
@@ -295,6 +321,20 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True):
     except (KeyError, JSONDecodeError):
         logging.log(logging.WARNING, str(chat_id) + str(response.content) + " attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1)
+
+
+async def handle_get_results_json_token(token, attempts=5):
+    if attempts == 0:
+        return [1]
+    try:
+        headers = EGE_HEADERS.copy()
+        headers["Cookie"] = "Participant=" + token
+        response = await requests.get(EGE_URL, headers=headers, timeout=5)
+        return [0, response.json()["Result"]["Exams"]]
+    except requests.RequestException:
+        return await handle_get_results_json_token(token, attempts - 1)
+    except (KeyError, JSONDecodeError):
+        return await handle_get_results_json_token(token, attempts - 1)
 
 
 # преобразование падежа слова "балл"
@@ -329,15 +369,13 @@ def check_results_updates(chat_id, response, callback_bot=None, is_user_request=
         for exam in response:
             exams.add(exam["ExamId"])
 
-        if is_user_request and (not old_hash or old_hash != new_hash):
-            users_table.update(chat_id, {
-                "exams": str(list(exams)),
-                "exams_hash": new_hash,
-                "exams_date": int(datetime.now().timestamp())
-            })
-
-        if old_hash != new_hash:    # результаты обновились
+        if old_hash != new_hash:  # результаты обновились
             if is_user_request:
+                users_table.update(chat_id, {
+                    "exams": str(list(exams)),
+                    "exams_hash": new_hash,
+                    "exams_date": int(datetime.now().timestamp())
+                })
                 on_results_updated(response, region, chat_id, callback_bot)
             else:
                 on_results_updated(response, region, 1, callback_bot)
@@ -345,11 +383,9 @@ def check_results_updates(chat_id, response, callback_bot=None, is_user_request=
         else:
             return False
 
-
-
     except NotFoundError:  # user logged out
         logging.log(logging.WARNING, "User: %d results after log out" % chat_id)
-        return 0
+        return False
 
 
 def on_results_updated(response, region, except_from_id=1, callback_bot=None):
@@ -362,30 +398,30 @@ def on_results_updated(response, region, except_from_id=1, callback_bot=None):
         has_result = exam["HasResult"]
         mark = exam["TestMark"]
 
-        thrown = []
+        ignored_exams = []
 
         if (has_result and not is_hidden) or int(mark):  # есть ли результат
-            if exam_id not in thrown and not is_composition:  # проверка на thrown/composition
-                region_exams = set(ast.literal_eval(regions_table.get(region)["exams"]))
+            if exam_id not in ignored_exams and not is_composition:  # проверка на thrown/composition
+                region_exams = set(ast.literal_eval(regions_table.get(region)["notified_exams"]))
                 if exam_id not in region_exams:  # проверка на существующее оповещение
                     region_exams.add(exam_id)
-                    regions_table.update(region, {"exams": str(list(region_exams))})
+                    regions_table.update(region, {"notified_exams": str(list(region_exams))})
 
                     logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
                     asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
 
 
-async def run_mailer(region, subject, subject_id, except_from_id=1, bot=None):
-    logging.log(logging.WARNING, "MAILER STARTED %d %s" % (region, subject))
+async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
+    logging.log(logging.WARNING, "MAILER STARTED %d %s" % (region, title))
     time = datetime.now().timestamp()
     users_count = 0
 
     with open('log_notify.txt', 'a') as logfile:
-        logfile.write("%s MAILER STARTED %d %s\n" % (datetime.now().strftime("%D %H:%M:%S"), region, subject))
+        logfile.write("%s MAILER STARTED %d %s\n" % (datetime.now().strftime("%D %H:%M:%S"), region, title))
 
     markup_button1 = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
     markup = types.InlineKeyboardMarkup().add(markup_button1)
-    message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % subject.upper()
+    message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % title.upper()
 
     for user in users_table.rows_where("region = ? AND notify = 1", [region]):
         chat_id = user["chat_id"]
@@ -396,7 +432,7 @@ async def run_mailer(region, subject, subject_id, except_from_id=1, bot=None):
                     user_exams = ast.literal_eval(user_exams_string)
                 else:
                     user_exams = []
-                if chat_id != except_from_id and subject_id in user_exams:
+                if chat_id != except_from_id and exam_id in user_exams:
                     try:
                         users_count += 1
                         await bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
@@ -410,16 +446,16 @@ async def run_mailer(region, subject, subject_id, except_from_id=1, bot=None):
                         logging.log(logging.WARNING, "User: %d unexpected error while notifying" % chat_id)
             except:
                 logging.log(logging.WARNING,
-                            "User: %d unexpected error while notifying %s" % (chat_id, sys.exc_info()[1]))
+                            "User: %d may have been deleted %s" % (chat_id, sys.exc_info()[1]))
         else:
             logging.log(logging.WARNING, "CALLBACK BOT is unspecified")
 
     time_stop = datetime.now().timestamp()
-    logging.log(logging.WARNING, "MAILER FINISHED %d %s in %f secs" % (region, subject, time_stop - time))
+    logging.log(logging.WARNING, "MAILER FINISHED %d %s in %f secs" % (region, title, time_stop - time))
     with open('log_notify.txt', 'a') as logfile:
         logfile.write(
             "%s MAILER FINISHED %d %s %d users, in %f secs\n" % (datetime.now().strftime("%D %H:%M:%S"), region,
-                                                                 subject, users_count, time_stop - time))
+                                                                 title, users_count, time_stop - time))
 
 
 def parse_results_message(chat_id, response, is_first, callback_bot=None):
@@ -440,8 +476,6 @@ def parse_results_message(chat_id, response, is_first, callback_bot=None):
     else:
         message += "*Текущие результаты:*\nОбновлений нет (на %s МСК)\n\n" % time
 
-    # message += "*Текущие результаты:* (на %s МСК)\n\n" % time
-
     for exam in response:
         title = exam["Subject"]
         is_composition = exam["IsComposition"]
@@ -449,7 +483,6 @@ def parse_results_message(chat_id, response, is_first, callback_bot=None):
         has_result = exam["HasResult"]
         mark = exam["TestMark"]
         mark_threshold = exam["MinMark"]
-        mark_string = ""
 
         if has_result and not is_hidden:
             if is_composition:

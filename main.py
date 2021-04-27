@@ -19,7 +19,7 @@ utils.db_init()
 
 
 # Captcha handler:
-async def handle_send_captcha(chat_id):
+async def bot_send_captcha(chat_id):
     await bot.send_message(chat_id, strings.login_captcha_prompt, parse_mode="MARKDOWN")
 
     shelve_result = await utils.handle_captchaGet(chat_id)
@@ -36,7 +36,7 @@ async def handle_send_captcha(chat_id):
 
 
 # Results get handler:
-async def handle_send_results(chat_id, is_first=False):
+async def bot_send_results(chat_id, is_first=False):
     if utils.user_check_logged(chat_id):
         try:
             response = await utils.handle_get_results_json(chat_id)
@@ -54,19 +54,20 @@ async def handle_send_results(chat_id, is_first=False):
 
             if is_first:
                 region = utils.user_get_region(chat_id)
-                utils.regions_update_exams(region, response)
+                utils.regions_update_exams(region, response[1])
+                utils.examsinfo_update(response[1])
         except RetryAfter:
             logging.log(logging.WARNING, "User: %d FLOOD CONTROL" % chat_id)
 
 
-async def handle_login_attempt(chat_id):
+async def bot_login_attempt(chat_id):
     if utils.user_get_login_status(chat_id) == "login":
         shelve_answer = await utils.handle_login(chat_id)
 
         if shelve_answer == 204:
             logging.log(logging.INFO, "User: %d user authened" % chat_id)
             await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(chat_id))
-            await handle_send_results(chat_id, is_first=True)
+            await bot_send_results(chat_id, is_first=True)
 
         elif shelve_answer == 450:
             # logging.log(logging.WARNING, "User: %d 450err" % chat_id)
@@ -128,7 +129,7 @@ async def clear_request(message: types.Message):
 
 @dp.message_handler(commands=['check'])
 async def check_request(message: types.Message):
-    await handle_send_results(message.chat.id)
+    await bot_send_results(message.chat.id)
 
 
 @dp.message_handler(commands=['version'])
@@ -151,7 +152,7 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
             if response[0] and response[0] != 1:  # throws Error
                 text = response[0]
             elif len(response[1]):  # else answer not null -> send response
-                text = utils.parse_results_message(chat_id, response[1], is_first=False, callback_bot=bot)
+                text = utils.parse_results_message(chat_id, response[1], callback_bot=bot)
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
@@ -223,13 +224,13 @@ async def process_callback_regions_hide(callback_query: types.CallbackQuery):
 async def process_callback_captcha_again(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
     if utils.user_get_login_status(callback_query.message.chat.id) == "captcha":
-        await handle_send_captcha(callback_query.message.chat.id)
+        await bot_send_captcha(callback_query.message.chat.id)
 
 
 @dp.callback_query_handler(lambda c: c.data == 'login_retry')
 async def process_callback_login_retry(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
-    await handle_login_attempt(chat_id)
+    await bot_login_attempt(chat_id)
     await bot.answer_callback_query(callback_query.id)
 
 
@@ -273,7 +274,7 @@ async def btn_timetable(message: types.Message):
 @dp.message_handler(regexp='Получить результаты 🔄')
 async def btn_results(message: types.Message):
     if utils.user_check_logged(message.chat.id):
-        await handle_send_results(message.chat.id)
+        await bot_send_results(message.chat.id)
 
 
 @dp.message_handler(regexp='Выйти')
@@ -354,7 +355,7 @@ async def echo(message: types.Message):
         shelve_result = utils.user_login_setPassport(chat_id, text)
 
         if shelve_result:
-            await handle_send_captcha(chat_id)
+            await bot_send_captcha(chat_id)
         else:
             await message.answer(strings.login_passport_incorrect)
 
@@ -363,13 +364,13 @@ async def echo(message: types.Message):
         shelve_answer = utils.user_login_checkCaptcha(chat_id, text)
         if shelve_answer:
             await message.answer(strings.login_auth_process)
-            await handle_login_attempt(chat_id)
+            await bot_login_attempt(chat_id)
         else:
             await message.answer(strings.login_captcha_incorrect, reply_markup=buttons.markup_inline_retry_captcha())
 
     elif status == "login":
         await message.answer(strings.login_auth_process)
-        await handle_login_attempt(chat_id)
+        await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
         # logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
@@ -382,6 +383,6 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    # loop.create_task(auto_checker.check_thread_runner([20, 24], bot))
+    loop.create_task(auto_checker.check_thread_runner([20, 24], bot))
 
     executor.start_polling(dp, skip_updates=True)

@@ -3,10 +3,12 @@ NOTIFY_TIME = 0
 
 db_users_filename = "users.db"
 db_regions_filename = "regions.db"
+db_examsinfo_filename = "exams_info.db"
 
 db_table_users = "users"
 db_table_login = "login"
 db_table_regions = "regions"
+db_table_examsinfo = "exams_info"
 
 EGE_URL = "http://check.ege.edu.ru/api/exam"
 EGE_TOKEN_URL = "http://check.ege.edu.ru/api/captcha"
