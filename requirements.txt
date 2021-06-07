@@ -27,7 +27,7 @@ rfc3986==1.4.0
 six==1.15.0
 sqlite-utils==2.11
 tabulate==0.8.7
-urllib3==1.25.9
+urllib3==1.26.5
 yarl==1.4.2
 zope.event==4.4
 zope.interface==5.1.0
