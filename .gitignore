@@ -4,3 +4,4 @@
 *.db
 /token.txt
 /log_notify.txt
+/venv
