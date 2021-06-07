@@ -279,6 +279,7 @@ async def handle_login(chat_id):
         session = requests.Session()
         response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
         token = session.cookies.get_dict()["Participant"]
+
         users_table.insert({
             "chat_id": chat_id,
             "region": user["region"],
@@ -458,7 +459,7 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
                                                                  title, users_count, time_stop - time))
 
 
-def parse_results_message(chat_id, response, is_first, callback_bot=None):
+def parse_results_message(chat_id, response, is_first=False, callback_bot=None):
     time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
 
     updates = check_results_updates(chat_id, response, callback_bot)
