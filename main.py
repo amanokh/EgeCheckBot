@@ -117,7 +117,7 @@ async def send_welcome(message: types.Message):
         await message.answer(strings.start_authed)
     else:
         # logging.log(logging.INFO, "User: %s start", message.chat.id)
-        await message.answer(strings.start_agree, reply_markup=buttons.markup_login())
+        await message.answer(strings.start_agree, reply_markup=buttons.markup_login(), parse_mode="MARKDOWN")
         await message.answer(strings.start_name)
         utils.user_login_start(int(message.chat.id))
 
@@ -135,6 +135,11 @@ async def check_request(message: types.Message):
 @dp.message_handler(commands=['version'])
 async def check_request(message: types.Message):
     await message.answer(config.VERSION_BUILD)
+
+
+@dp.message_handler(commands=['stats'])
+async def check_request(message: types.Message):
+    await message.answer(utils.table_count())
 
 
 # Button callbacks:
@@ -369,7 +374,7 @@ async def echo(message: types.Message):
             await message.answer(strings.login_captcha_incorrect, reply_markup=buttons.markup_inline_retry_captcha())
 
     elif status == "login":
-        await message.answer(strings.login_auth_process)
+        # await message.answer(strings.login_auth_process)
         await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
@@ -383,6 +388,6 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.create_task(auto_checker.check_thread_runner([20, 24], bot))
+    loop.create_task(auto_checker.check_thread_runner([22, 23, 30], bot))
 
     executor.start_polling(dp, skip_updates=True)

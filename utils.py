@@ -77,8 +77,10 @@ def table_count():
         users_count = users_table.count
         login_count = login_table.count
 
-        return "U: %d, L: %d, Server time: %s" % (
-            users_count, login_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
+        exams_count = examsinfo_table.count
+
+        return "Users logged: %d, not logged: %d, Parsed exams: %d, Server time: %s" % (
+            users_count, login_count, exams_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
     except Exception as e:
         return str(e)
 
@@ -255,6 +257,8 @@ async def handle_captchaGet(chat_id):
         return response.json()
     except (requests.RequestException, AttributeError):
         return None
+    except:
+        return None
 
 
 async def handle_login(chat_id):
@@ -304,11 +308,12 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True):
         return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
     try:
         date = users_table.get(chat_id)["exams_date"]
-        if not date or datetime.now().timestamp() - date > 30:
+        if not date or datetime.now().timestamp() - date > 10:
             token = users_table.get(chat_id)["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
             response = await requests.get(EGE_URL, headers=headers, timeout=5)
+            users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
             if logs: logging.log(logging.INFO, "User: %d results got" % chat_id)
             return [0, response.json()["Result"]["Exams"]]
         else:
