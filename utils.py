@@ -316,7 +316,7 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True):
             users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
             if logs:
                 logging.log(logging.INFO, "User: %d results got" % chat_id)
-                with open('log_res_activity.txt', 'a') as logfile:
+                with open('log_res_activity.txt\n', 'a') as logfile:
                     logfile.write("%d" % chat_id)
 
             return [0, response.json()["Result"]["Exams"]]
