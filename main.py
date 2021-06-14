@@ -388,6 +388,6 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    #loop.create_task(auto_checker.check_thread_runner([22, 23, 30], bot))
+    loop.create_task(auto_checker.check_thread_runner([22, 23, 30], bot))
 
     executor.start_polling(dp, skip_updates=True)
