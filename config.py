@@ -1,6 +1,6 @@
 API_TOKEN = open("token.txt", "r").read() # put your Telegram Bot API token here
 NOTIFY_TIME = 0
-VERSION_BUILD = "1.9.1_20210609_1520"
+VERSION_BUILD = "1.9.11_20210614_1520"
 
 db_users_filename = "users.db"
 db_regions_filename = "regions.db"
@@ -11,7 +11,7 @@ db_table_login = "login"
 db_table_regions = "regions"
 db_table_examsinfo = "exams_info"
 
-EGE_URL = "http://check.ege.edu.ru/api/exam"
+EGE_URL = "http://checkege.rustest.ru/api/exam"
 EGE_TOKEN_URL = "http://check.ege.edu.ru/api/captcha"
 EGE_LOGIN_URL = "http://check.ege.edu.ru/api/participant/login"
 

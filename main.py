@@ -187,7 +187,7 @@ async def process_callback_regions_show(callback_query: types.CallbackQuery):
         await bot.answer_callback_query(callback_query.id)
         await bot.edit_message_text(chat_id=callback_query.message.chat.id,
                                     message_id=callback_query.message.message_id,
-                                    text=strings.regions_message,
+                                    text=strings.list_regions(),
                                     parse_mode="MARKDOWN",
                                     reply_markup=markup)
     except MessageNotModified:
@@ -287,7 +287,7 @@ async def btn_logout(message: types.Message):
     await clear_user(message.chat.id)
 
 
-@dp.message_handler(regexp='Удалить данные')
+@dp.message_handler(regexp='Начать заново')
 async def btn_clear(message: types.Message):
     await clear_user(message.chat.id)
 
@@ -348,10 +348,10 @@ async def echo(message: types.Message):
     elif status == 'region':
         # logging.log(logging.INFO, "User: %d region: %s" % (chat_id, text))
 
-        await send_notify_region_site(chat_id, text)
-        shelve_result = utils.user_login_setRegion(chat_id, text)
-
-        if shelve_result:
+        if len(text) == 2 and text.isdigit() and int(text) in strings.regions:
+            utils.user_login_setRegion(chat_id, text)
+            await bot.send_message(chat_id, strings.confirm_region(int(text)), parse_mode="MARKDOWN")
+            await send_notify_region_site(chat_id, text)
             await message.answer(strings.login_passport)
         else:
             await message.answer(strings.login_region_incorrect, reply_markup=buttons.markup_inline_regions())
@@ -368,13 +368,13 @@ async def echo(message: types.Message):
         # Check captcha:
         shelve_answer = utils.user_login_checkCaptcha(chat_id, text)
         if shelve_answer:
-            await message.answer(strings.login_auth_process)
+            # await message.answer(strings.login_auth_process)
             await bot_login_attempt(chat_id)
         else:
             await message.answer(strings.login_captcha_incorrect, reply_markup=buttons.markup_inline_retry_captcha())
 
     elif status == "login":
-        # await message.answer(strings.login_auth_process)
+        await message.answer(strings.login_auth_process)
         await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
@@ -388,6 +388,6 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.create_task(auto_checker.check_thread_runner([22, 23, 30], bot))
+    #loop.create_task(auto_checker.check_thread_runner([22, 23, 30], bot))
 
     executor.start_polling(dp, skip_updates=True)

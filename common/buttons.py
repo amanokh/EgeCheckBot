@@ -26,7 +26,7 @@ def markup_logged(chat_id):
 
 
 def markup_login():
-    markup_btn_login = types.KeyboardButton("Удалить данные")
+    markup_btn_login = types.KeyboardButton("Начать заново")
     markup_btn_help = types.KeyboardButton("Помощь ℹ️")
     markup_btn_timetable = types.KeyboardButton("Даты 🗓")
 
