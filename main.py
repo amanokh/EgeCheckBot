@@ -403,4 +403,4 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     loop.create_task(auto_checker.check_thread_runner([21, 335], bot))
 
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_polling(dp, skip_updates=True, allowed_updates=types.AllowedUpdates.MESSAGE + types.AllowedUpdates.CALLBACK_QUERY)
