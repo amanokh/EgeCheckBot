@@ -8,7 +8,7 @@ def markup_logged(chat_id):
     markup_btn_logout = types.KeyboardButton("Выйти ❌")
     markup_btn_help = types.KeyboardButton("Помощь ℹ️")
     markup_btn_timetable = types.KeyboardButton("Даты 🗓")
-    markup_btn_donate = types.KeyboardButton("Поддержать автора 💸")
+    markup_btn_donate = types.KeyboardButton("Поддержать автора 💗")
     markup_btn_notify_off = types.KeyboardButton("Выключить уведомления 🔕")
     markup_btn_notify_on = types.KeyboardButton("Включить уведомления 🔔")
 
@@ -48,7 +48,7 @@ def markup_init():
 
 def markup_closed():
     markup_btn_login = types.KeyboardButton("Написать автору ✏️")
-    markup_btn_donate = types.KeyboardButton('Отправить пожертвование 💸')
+    markup_btn_donate = types.KeyboardButton("Поддержать автора 💗")
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(markup_btn_login).add(markup_btn_donate)
     return markup

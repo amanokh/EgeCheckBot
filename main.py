@@ -312,20 +312,12 @@ async def btn_notify_off(message: types.Message):
         await message.answer(strings.login_notify_off, reply_markup=buttons.markup_logged(message.chat.id))
 
 
-@dp.message_handler(regexp='Поддержать автора 💸')
+@dp.message_handler(regexp='Поддержать автора')
 async def btn_donate(message: types.Message):
     if relax and utils.user_set_check_request_time(message.chat.id):
         await bot.send_sticker(message.chat.id,
-                               sticker="CAACAgIAAxkBAAEFbFZfExWWz35Cxl39miaINZPBBtbN7AACkgEAAk-cEwJ5I1T3ZxOTnRoE")
+                               sticker="CAACAgIAAxkBAAEKasBgy2lj2DqnFd0sPmUAAZUqXxptRE8AAk4CAAJWnb0KMP5rbYEyA28fBA")
         await message.answer(strings.donate_message, parse_mode="MARKDOWN")
-
-
-@dp.message_handler(regexp='Отправить пожертвование 💸')
-async def btn_donate(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
-        await bot.send_sticker(message.chat.id,
-                               sticker="CAACAgIAAxkBAAEFbFZfExWWz35Cxl39miaINZPBBtbN7AACkgEAAk-cEwJ5I1T3ZxOTnRoE")
-        await message.answer(strings.donate_message)
 
 
 @dp.message_handler(regexp="Написать автору ✏️")
