@@ -317,7 +317,7 @@ async def btn_donate(message: types.Message):
     if relax and utils.user_set_check_request_time(message.chat.id):
         await bot.send_sticker(message.chat.id,
                                sticker="CAACAgIAAxkBAAEFbFZfExWWz35Cxl39miaINZPBBtbN7AACkgEAAk-cEwJ5I1T3ZxOTnRoE")
-        await message.answer(strings.donate_message)
+        await message.answer(strings.donate_message, parse_mode="MARKDOWN")
 
 
 @dp.message_handler(regexp='Отправить пожертвование 💸')
