@@ -14,7 +14,8 @@ def users_sampleSelections_generator(exams, num_of_users=2):
         for region in utils.regions_table.rows:
             users_ids = []
             region_id = region["region"]
-            users_init_table = utils.db_users.execute_returning_dicts(f"SELECT * FROM users WHERE exams IS NOT NULL AND region={region_id} ORDER BY RANDOM()")
+            users_init_table = utils.db_users.execute_returning_dicts(
+                f"SELECT * FROM users WHERE exams IS NOT NULL AND region={region_id} ORDER BY RANDOM()")
 
             sampled_users_counter = 0
 
@@ -50,7 +51,8 @@ async def check_thread_runner(exams, bot):
                     for region in sampleExamsSelection:
                         for user_id in sampleExamsSelection[region]:
                             if utils.user_check_logged(user_id):
-                                response = await utils.handle_get_results_json(user_id, logs=False)
+                                response = await utils.handle_get_results_json(user_id, logs=False,
+                                                                               is_user_request=False)
                                 await asyncio.sleep(0.5)
 
                                 if not response[0] and len(response[1]):

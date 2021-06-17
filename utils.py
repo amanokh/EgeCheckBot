@@ -12,7 +12,7 @@ from datetime import datetime
 from hashlib import md5
 from config import db_users_filename, db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
     EGE_LOGIN_URL, \
-    db_regions_filename, db_table_regions, db_examsinfo_filename, db_table_examsinfo
+    db_regions_filename, db_table_regions, db_examsinfo_filename, db_table_examsinfo, relax_timer
 from sqlite_utils import Database
 from sqlite_utils.db import NotFoundError
 from json.decoder import JSONDecodeError
@@ -211,6 +211,18 @@ def user_get_region(chat_id):
         return None
 
 
+def user_set_check_request_time(chat_id):
+    try:
+        time = users_table.get(chat_id)["exams_date"]
+        if not time or int(datetime.now().timestamp()) - time >= relax_timer:
+            users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
+            return True
+        else:
+            return False
+    except:
+        return True
+
+
 def regions_update_exams(region, response):
     try:
         exams = set(ast.literal_eval(regions_table.get(region)["exams"]))
@@ -303,21 +315,22 @@ async def handle_login(chat_id):
         return 452
 
 
-async def handle_get_results_json(chat_id, attempts=5, logs=True):
+async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_request=True):
     if attempts == 0:
         return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
     try:
         date = users_table.get(chat_id)["exams_date"]
-        if not date or datetime.now().timestamp() - date > 10:
+        if not date or not is_user_request or datetime.now().timestamp() - date > 10:
+            if is_user_request:
+                users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
             token = users_table.get(chat_id)["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
             response = await requests.get(EGE_URL, headers=headers, timeout=5)
-            users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
             if logs:
                 logging.log(logging.INFO, "User: %d results got" % chat_id)
-                with open('log_res_activity.txt', 'a') as logfile:
-                    logfile.write("%d\n" % chat_id)
+                with open('log_time_activity.txt', 'a') as logfile:
+                    logfile.write("%s %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
 
             return [0, response.json()["Result"]["Exams"]]
         else:
@@ -327,10 +340,10 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True):
         return ["Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout."]
     except requests.RequestException:
         logging.log(logging.WARNING, str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
-        return await handle_get_results_json(chat_id, attempts - 1)
+        return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
     except (KeyError, JSONDecodeError):
         logging.log(logging.WARNING, str(chat_id) + str(response.content) + " attempt: %d" % attempts)
-        return await handle_get_results_json(chat_id, attempts - 1)
+        return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
 
 
 async def handle_get_results_json_token(token, attempts=5):
@@ -476,8 +489,8 @@ def parse_results_message(chat_id, response, is_first=False, callback_bot=None):
     mark_sum = 0
     show_sum = True
 
-    # message = "🔥 *Наблюдается большая нагрузка на сервер. Из-за ограничений Telegram результаты можно запрашивать только раз в минуту. Пожалуйста, делайте запросы реже и подключите уведомления о новых результатах!*\n\n"
-    message = ""
+    message = "🔥 *Наблюдается большая нагрузка на сервер. Из-за ограничений Telegram результаты можно запрашивать только раз в минуту. Пожалуйста, делайте запросы реже и подключите уведомления о новых результатах!*\n\n"
+    # message = ""
 
     if is_first:
         message += "*Текущие результаты:* (на %s МСК)\n\n" % time
