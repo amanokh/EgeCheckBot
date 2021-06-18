@@ -119,7 +119,7 @@ async def send_notify_region_site(chat_id, region):
 async def send_welcome(message: types.Message):
     logging.log(logging.INFO, message.chat.id)
     shelve_result = utils.user_check_logged(int(message.chat.id))
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         if shelve_result:
             await message.answer(strings.start_authed)
         else:
@@ -266,7 +266,7 @@ async def process_callback_start_over(callback_query: types.CallbackQuery):
 @dp.message_handler(regexp='Авторизоваться ➡️')
 async def btn_login_start(message: types.Message):
     shelve_result = utils.user_check_logged(int(message.chat.id))
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         if shelve_result:
             await message.answer(strings.start_authed)
         else:
@@ -276,13 +276,13 @@ async def btn_login_start(message: types.Message):
 
 @dp.message_handler(regexp='Помощь')
 async def btn_help(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         await message.answer(strings.help_message, parse_mode="MARKDOWN")
 
 
 @dp.message_handler(regexp='Даты')
 async def btn_timetable(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         await message.answer(strings.timetable_message, parse_mode="MARKDOWN")
 
 
@@ -304,21 +304,21 @@ async def btn_clear(message: types.Message):
 
 @dp.message_handler(regexp='Включить уведомления')
 async def btn_notify_on(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         utils.users_table.update(message.chat.id, {"notify": 1})
         await message.answer(strings.login_notify_on, reply_markup=buttons.markup_logged(message.chat.id))
 
 
 @dp.message_handler(regexp='Выключить уведомления')
 async def btn_notify_off(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         utils.users_table.update(message.chat.id, {"notify": 0})
         await message.answer(strings.login_notify_off, reply_markup=buttons.markup_logged(message.chat.id))
 
 
 @dp.message_handler(regexp='Поддержать автора')
 async def btn_donate(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         await bot.send_sticker(message.chat.id,
                                sticker="CAACAgIAAxkBAAEKasBgy2lj2DqnFd0sPmUAAZUqXxptRE8AAk4CAAJWnb0KMP5rbYEyA28fBA")
         await message.answer(strings.donate_message, parse_mode="MARKDOWN")
@@ -331,7 +331,7 @@ async def btn_donate(message: types.Message):
 
 @dp.message_handler(content_types=['sticker'])
 async def sticker_answer(message: types.Message):
-    if relax and utils.user_set_check_request_time(message.chat.id):
+    if not relax or utils.user_set_check_request_time(message.chat.id):
         await bot.send_sticker(message.chat.id,
                                sticker="AAMCAgADGQEAAQprPWDLi_w_C1-veWxNoEK41yaz5ol1AAK0AAPA-wgAAfl2_ploBMcDh8pcDwAEAQAHbQADKU4AAh8E")
 
@@ -386,11 +386,11 @@ async def echo(message: types.Message):
 
     elif status == "logged":  # incorrect command
         # logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
-        if relax and utils.user_set_check_request_time(message.chat.id):
+        if not relax or utils.user_set_check_request_time(message.chat.id):
             await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged(chat_id))
 
     else:
-        if relax and utils.user_set_check_request_time(message.chat.id):
+        if not relax or utils.user_set_check_request_time(message.chat.id):
             logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
             await message.answer(strings.login_unauthorized)
 
