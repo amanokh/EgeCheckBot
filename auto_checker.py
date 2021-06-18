@@ -5,7 +5,7 @@ import utils
 from datetime import datetime
 
 
-def users_sampleSelections_generator(exams, num_of_users=2):
+async def users_sampleSelections_generator(exams, num_of_users=2):
     samples_list = []
     logging.log(logging.WARNING, "Checker Regeneration: exams list: %s" % str(exams))
 
@@ -46,7 +46,7 @@ async def check_thread_runner(exams, bot):
     samples_age = datetime.now().timestamp()
     samples_need_to_regenarate = False
 
-    samples_list = users_sampleSelections_generator(exams)
+    samples_list = await users_sampleSelections_generator(exams)
 
     while exams:
         time_loop = datetime.now().timestamp()
@@ -72,13 +72,13 @@ async def check_thread_runner(exams, bot):
 
                 if datetime.now().timestamp() - samples_age > 600 or samples_need_to_regenarate:
                     samples_age = datetime.now().timestamp()
-                    samples_list = users_sampleSelections_generator(exams)
+                    samples_list = await users_sampleSelections_generator(exams)
             except:
                 logging.log(logging.WARNING, "Checker: an unexpected error happen")
         else:
             logging.log(logging.WARNING, "Checker: samplesList is empty, waiting for 600 secs...")
             await asyncio.sleep(600)
-            samples_list = users_sampleSelections_generator(exams)
+            samples_list = await users_sampleSelections_generator(exams)
 
 
 async def auto_checker(bot):
