@@ -1,4 +1,4 @@
-## [@EgeCheckBot](t.me/EgeCheckBot) — Telegram-бот для проверки результатов ЕГЭ
+## [@EgeCheckBot](https://t.me/EgeCheckBot) — Telegram-бот для проверки результатов ЕГЭ
 
 Лаконичный чат-бот для проверки результатов ЕГЭ, получающий данные с [официального сервиса](check.ege.edu.ru) Минобрнауки.
 
