@@ -306,6 +306,8 @@ async def handle_login(chat_id):
         })
 
         login_table.delete(chat_id)
+        with open('log_login_activity.txt', 'a') as logfile:
+            logfile.write("%s, %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
         return 204
     except KeyError:
         return 450
@@ -320,7 +322,7 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
         return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
     try:
         date = users_table.get(chat_id)["exams_date"]
-        if not date or not is_user_request or datetime.now().timestamp() - date > 10:
+        if not date or not is_user_request or datetime.now().timestamp() - date > 15:
             if is_user_request:
                 users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
             token = users_table.get(chat_id)["token"]

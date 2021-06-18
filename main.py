@@ -17,7 +17,7 @@ dp = Dispatcher(bot)
 # Initialize database
 utils.db_init()
 
-relax = True
+relax = False
 
 
 # Captcha handler:
@@ -60,6 +60,10 @@ async def bot_send_results(chat_id, is_first=False):
                 utils.examsinfo_update(response[1])
         except RetryAfter:
             logging.log(logging.WARNING, "User: %d FLOOD CONTROL" % chat_id)
+            global relax
+            relax = True
+            logging.log(logging.WARNING, "Dispatcher: Relaxing enabled")
+
 
 
 async def bot_login_attempt(chat_id):
@@ -329,7 +333,7 @@ async def btn_donate(message: types.Message):
 async def sticker_answer(message: types.Message):
     if relax and utils.user_set_check_request_time(message.chat.id):
         await bot.send_sticker(message.chat.id,
-                           sticker="CAACAgIAAxkBAAEFeUBfGQABsjZ9enZWh28WepofFX0uLMAAAtAAAzMkAAEMpaqRVXRTgaAaBA")
+                               sticker="AAMCAgADGQEAAQprPWDLi_w_C1-veWxNoEK41yaz5ol1AAK0AAPA-wgAAfl2_ploBMcDh8pcDwAEAQAHbQADKU4AAh8E")
 
 
 @dp.message_handler()
@@ -393,6 +397,7 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.create_task(auto_checker.check_thread_runner([21, 335], bot))
+    loop.create_task(auto_checker.check_thread_runner([22, 23, 30, 21, 335, 24], bot))
 
-    executor.start_polling(dp, skip_updates=True, allowed_updates=types.AllowedUpdates.MESSAGE + types.AllowedUpdates.CALLBACK_QUERY)
+    executor.start_polling(dp, skip_updates=True,
+                           allowed_updates=types.AllowedUpdates.MESSAGE + types.AllowedUpdates.CALLBACK_QUERY)

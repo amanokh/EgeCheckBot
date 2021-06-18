@@ -1,8 +1,8 @@
 API_TOKEN = open("token.txt", "r").read() # put your Telegram Bot API token here
 NOTIFY_TIME = 0
-VERSION_BUILD = "1.9.12_20210617_1520"
+VERSION_BUILD = "1.9.2_20210618_1120"
 
-relax_timer = 2
+relax_timer = 5
 
 db_users_filename = "users.db"
 db_regions_filename = "regions.db"
