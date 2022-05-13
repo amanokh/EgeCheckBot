@@ -1,7 +1,0 @@
-/.idea
-*/__pycache__
-*.pyc
-*.db
-/token.txt
-/log_notify.txt
-/venv
