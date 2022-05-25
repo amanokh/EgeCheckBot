@@ -269,8 +269,8 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
     if attempts == 0:
         return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
     try:
-        if "TODO: make throttling here":
-            user = await users_table.get(chat_id)
+        user = await users_table.get(chat_id)
+        if user:
             token = user["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
@@ -282,10 +282,8 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
 
             return [0, response.json()["Result"]["Exams"]]
         else:
-            return [1, ""]
-    except NotFoundError:
-        logging.log(logging.WARNING, "User: %d results UNSUCCESSFUL: unlogged" % chat_id)
-        return ["Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout."]
+            logging.log(logging.WARNING, "User: %d results UNSUCCESSFUL: unlogged" % chat_id)
+            return ["Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout."]
     except requests.RequestException:
         logging.log(logging.WARNING, str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
