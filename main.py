@@ -341,11 +341,7 @@ async def echo(message: types.Message):
     chat_id = message.chat.id
     status = await utils.user_get_login_status(chat_id)
 
-    logging.log(logging.INFO, "%d msg got %s" % (chat_id, text))
-
     if status == '_name':
-        # logging.log(logging.INFO, "%d _name %s" % (chat_id, text))
-
         shelve_result = await utils.user_login_setName(chat_id, text)
 
         if shelve_result:
@@ -354,8 +350,6 @@ async def echo(message: types.Message):
             await message.answer(strings.login_name_incorrect)
 
     elif status == 'region':
-        # logging.log(logging.INFO, "User: %d region: %s" % (chat_id, text))
-
         if len(text) == 2 and text.isdigit() and int(text) in strings.regions:
             await utils.user_login_setRegion(chat_id, text)
             await bot.send_message(chat_id, strings.confirm_region(int(text)), parse_mode="MARKDOWN")
@@ -376,7 +370,6 @@ async def echo(message: types.Message):
         # Check captcha:
         shelve_answer = await utils.user_login_checkCaptcha(chat_id, text)
         if shelve_answer:
-            # await message.answer(strings.login_auth_process)
             await bot_login_attempt(chat_id)
         else:
             await message.answer(strings.login_captcha_incorrect, reply_markup=buttons.markup_inline_retry_captcha())
@@ -386,7 +379,7 @@ async def echo(message: types.Message):
         await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
-        # logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
+        logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
         if not relax:
             notify_status = await utils.user_get_notify_status(message.chat.id)
             await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged(notify_status))
