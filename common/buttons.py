@@ -1,9 +1,8 @@
 from aiogram import types
-import utils
 
 
 # ReplyKeyboardMarkup mockups:
-def markup_logged(chat_id):
+def markup_logged(notify_status):
     markup_btn_update = types.KeyboardButton("Получить результаты 🔄")
     markup_btn_logout = types.KeyboardButton("Выйти ❌")
     markup_btn_help = types.KeyboardButton("Помощь ℹ️")
@@ -12,7 +11,7 @@ def markup_logged(chat_id):
     markup_btn_notify_off = types.KeyboardButton("Выключить уведомления 🔕")
     markup_btn_notify_on = types.KeyboardButton("Включить уведомления 🔔")
 
-    if utils.user_get_notify_status(chat_id):
+    if notify_status:
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(
             markup_btn_update).add(markup_btn_help, markup_btn_timetable, markup_btn_logout) \
             .add(markup_btn_notify_off) \
@@ -62,7 +61,7 @@ def markup_inline_regions():
 
 def markup_inline_results():
     markup_button1 = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
-    markup_button2 = types.InlineKeyboardButton("Подробнее на сайте", url="http://check.ege.edu.ru")
+    markup_button2 = types.InlineKeyboardButton("Подробнее на сайте", url="http://checkege.rustest.ru")
     markup = types.InlineKeyboardMarkup().add(markup_button1).add(markup_button2)
     return markup
 
@@ -74,8 +73,8 @@ def markup_inline_notify_on():
 
 
 def markup_inline_donate():
-    markup_button1 = types.InlineKeyboardButton("Отправить пожертвование",
-                                                url="https://tinkoff.ru/rm/manokhin.anton1/fAshc64504/")
+    markup_button1 = types.InlineKeyboardButton("Отправить донейт",
+                                                url="https://manokh.com/donate")
     markup = types.InlineKeyboardMarkup().add(markup_button1)
     return markup
 

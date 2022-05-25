@@ -10,74 +10,57 @@ import requests_async as requests
 
 from datetime import datetime
 from hashlib import md5
-from config import db_users_filename, db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
-    EGE_LOGIN_URL, \
-    db_regions_filename, db_table_regions, db_examsinfo_filename, db_table_examsinfo, relax_timer
-from sqlite_utils import Database
-from sqlite_utils.db import NotFoundError
+from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
+    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, relax_timer
+
+from db_worker import DbConnection, DbTable
+from pypika import Column
+
 from json.decoder import JSONDecodeError
 from aiogram import types, exceptions
 
-db_users = Database(db_users_filename)
-users_table = db_users.table(db_table_users)
-login_table = db_users.table(db_table_login)
+db_conn = DbConnection().conn
 
-db_regions = Database(db_regions_filename)
-regions_table = db_regions.table(db_table_regions)
+users_table = DbTable(db_conn, db_table_users,
+                      (Column("chat_id", "int", nullable=False),
+                       Column("region", "int", nullable=False),
+                       Column("notify", "int", nullable=False, default=1),
+                       Column("token", "text", nullable=False),
+                       Column("login_date", "int"),
+                       Column("exams", "text"),
+                       Column("exams_hash", "text")),
+                      pk_id="chat_id")
+login_table = DbTable(db_conn, db_table_login,
+                      (Column("chat_id", "int", nullable=False),
+                       Column("status", "text", nullable=False),
+                       Column("_name", "text"),
+                       Column("region", "int"),
+                       Column("passport", "text"),
+                       Column("captcha_token", "text"),
+                       Column("captcha_answer", "text")),
+                      pk_id="chat_id")
 
-db_examsinfo = Database(db_examsinfo_filename)
-examsinfo_table = db_examsinfo.table(db_table_examsinfo)
+regions_table = DbTable(db_conn, db_table_regions,
+                        (Column("region", "int", nullable=False),
+                         Column("exams", "text", default="[]"),
+                         Column("notified_exams", "text", default="[]")),
+                        pk_id="region")
 
-
-def db_init():
-    if not users_table.exists():
-        users_table.create({
-            "chat_id": int,
-            "region": int,
-            "notify": int,
-            "token": str,
-            "login_date": int,
-            "exams": str,
-            "exams_hash": str,
-            "exams_date": int
-        }, pk="chat_id", not_null={"region", "token", "notify"}, defaults={"notify": 1})
-        logging.log(logging.WARNING, "Users.db->users was created")
-    if not login_table.exists():
-        login_table.create({
-            "chat_id": int,
-            "status": str,
-            "name": str,
-            "region": int,
-            "passport": str,
-            "captcha_token": str,
-            "captcha_answer": str
-        }, pk="chat_id", not_null={"status"})
-        logging.log(logging.WARNING, "Users.db->login was created")
-
-    if not regions_table.exists():
-        regions_table.create({
-            "region": int,
-            "exams": str,
-            "notified_exams": str
-        }, pk="region", defaults={"exams": "[]", "notified_exams": "[]"})
-        logging.log(logging.WARNING, "Regions.db->regions was created")
-    if not examsinfo_table.exists():
-        examsinfo_table.create({
-            "exam_id": int,
-            "title": str,
-            "exam_date": str,
-            "res_date_official": str,
-            "res_date_predicted": str
-        }, pk="exam_id", not_null={"title", "exam_date"})
-        logging.log(logging.WARNING, "Exams_info.db->exams_info was created")
+examsinfo_table = DbTable(db_conn, db_table_examsinfo,
+                          (Column("exam_id", "int", nullable=False),
+                           Column("title", "text", nullable=False),
+                           Column("exam_date", "text"),
+                           Column("res_date_official", "text"),
+                           Column("res_date_predicted", "text")),
+                          pk_id="exam_id")
 
 
-def table_count():
+async def table_count():
     try:
-        users_count = users_table.count
-        login_count = login_table.count
+        users_count = await users_table.count()
+        login_count = await login_table.count()
 
-        exams_count = examsinfo_table.count
+        exams_count = await examsinfo_table.count()
 
         return "Users logged: %d, not logged: %d, Parsed exams: %d, Server time: %s" % (
             users_count, login_count, exams_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
@@ -98,153 +81,120 @@ def emoji_add(emoji):
         return temp
 
 
-def user_check_logged(chat_id):
-    try:
-        users_table.get(chat_id)
+async def user_check_logged(chat_id):
+    return await users_table.get(chat_id)
+
+
+async def user_get_login_status(chat_id):
+    if await users_table.get(chat_id):
+        return "logged"
+    else:
+        user = await login_table.get(chat_id)
+        if user:
+            return user["status"]
+
+
+async def user_get_notify_status(chat_id):
+    user = await users_table.get(chat_id)
+    if user:
+        return user["notify"]
+
+
+async def user_clear(chat_id):
+    if await users_table.get(chat_id):
+        await users_table.delete(chat_id)
         return True
-    except NotFoundError:
-        return False
 
 
-def user_get_login_status(chat_id):
-    try:
-        if user_check_logged(chat_id):
-            return "logged"
-        else:
-            return login_table.get(chat_id)["status"]
-    except NotFoundError:
-        return None
-
-
-def user_get_notify_status(chat_id):
-    try:
-        if user_check_logged(chat_id):
-            return users_table.get(chat_id)["notify"]
-    except NotFoundError:
-        return None
-
-
-def user_clear(chat_id):
-    try:
-        users_table.delete(chat_id)
+async def user_login_stop(chat_id):
+    if await login_table.get(chat_id):
+        await login_table.delete(chat_id)
         return True
-    except NotFoundError:
-        return False
 
 
-def user_login_stop(chat_id):
-    try:
-        login_table.delete(chat_id)
-        return True
-    except NotFoundError:
-        return False
+async def user_login_start(chat_id):
+    await user_clear(chat_id)
+    await user_login_stop(chat_id)
 
-
-def user_login_start(chat_id):
-    user_clear(chat_id)
-    user_login_stop(chat_id)
-
-    login_table.insert({
+    await login_table.insert({
         "chat_id": chat_id,
-        "status": "name"
+        "status": "_name"
     })
 
 
-def user_login_setName(chat_id, name):
+async def user_login_setName(chat_id, name):
     a = name.split(" ")
     name_merged = md5(''.join(a).lower().replace("ё", "е").replace("й", "и").replace("-", "").encode()).hexdigest()
 
     if len(a) >= 2:
-        login_table.update(chat_id, {
+        await login_table.update(chat_id, {
             "status": "region",
-            "name": name_merged
+            "_name": name_merged
         })
         return True
-    else:
-        return False
 
 
-def user_login_setRegion(chat_id, region):
+async def user_login_setRegion(chat_id, region):
     if len(region) == 2 and region.isdigit():
-        login_table.update(chat_id, {
+        await login_table.update(chat_id, {
             "status": "passport",
             "region": int(region)
         })
         return True
-    else:
-        return False
 
 
-def user_login_setPassport(chat_id, passport):
+async def user_login_setPassport(chat_id, passport):
     if 5 <= len(passport) <= 12:
-        login_table.update(chat_id, {
+        await login_table.update(chat_id, {
             "status": "captcha",
             "passport": passport
         })
         return True
-    else:
-        return False
 
 
-def user_login_checkCaptcha(chat_id, text):
+async def user_login_checkCaptcha(chat_id, text):
     if len(text) == 6 and text.isdigit():
-        login_table.update(chat_id, {
+        await login_table.update(chat_id, {
             "status": "login",
             "captcha_answer": text
         })
         return True
-    else:
-        return False
 
 
-def user_get_token(chat_id):
-    try:
-        return users_table.get(chat_id)["token"]
-    except NotFoundError:
-        return None
+async def user_get_token(chat_id):
+    user = await users_table.get(chat_id)
+    if user:
+        return user["token"]
 
 
-def user_get_region(chat_id):
-    try:
-        return users_table.get(chat_id)["region"]
-    except NotFoundError:
-        return None
+async def user_get_region(chat_id):
+    user = await users_table.get(chat_id)
+    if user:
+        return user["region"]
 
 
-def user_set_check_request_time(chat_id):
-    try:
-        time = users_table.get(chat_id)["exams_date"]
-        if not time or int(datetime.now().timestamp()) - time >= relax_timer:
-            users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
-            return True
-        else:
-            return False
-    except:
-        return True
-
-
-def regions_update_exams(region, response):
-    try:
-        exams = set(ast.literal_eval(regions_table.get(region)["exams"]))
-    except NotFoundError:
-        exams = set()
-
+async def regions_update_exams(region, response):
+    exams = set()
     for exam in response:
         exams.add(exam["ExamId"])
 
-    regions_table.upsert({"region": region, "exams": str(list(exams))}, pk="region")
+    region_info = await regions_table.get(region)
+    if region_info:
+        exams_db = set(ast.literal_eval(region_info["exams"]))
+        exams.update(exams_db)
+        await regions_table.update(region, {"region": region, "exams": str(list(exams))})
+    else:
+        await regions_table.insert({"region": region, "exams": str(list(exams))})
 
 
-def examsinfo_update(response):
+async def examsinfo_update(response):
     for exam in response:
         exam_id = exam["ExamId"]
         title = exam["Subject"]
         exam_date = exam["ExamDate"]
 
-        try:
-            examsinfo_table.get(exam_id)
-        except NotFoundError:
-            examsinfo_table.insert({
+        if not await examsinfo_table.get(exam_id):
+            await examsinfo_table.insert({
                 "exam_id": exam_id,
                 "title": title,
                 "exam_date": exam_date
@@ -261,7 +211,7 @@ def handle_captchaDelete(chat_id):
 async def handle_captchaGet(chat_id):
     try:
         response = await requests.get(EGE_TOKEN_URL, timeout=5)
-        login_table.update(chat_id, {
+        await login_table.update(chat_id, {
             "captcha_token": response.json()["Token"]
         })
         with open("_captcha" + str(chat_id), "wb") as f:
@@ -275,10 +225,10 @@ async def handle_captchaGet(chat_id):
 
 async def handle_login(chat_id):
     try:
-        user = login_table.get(chat_id)
+        user = await login_table.get(chat_id)
         if 5 <= len(user["passport"]) < 12:
             params = {
-                "Hash": user["name"],
+                "Hash": user["_name"],
                 "Document": user["passport"].rjust(12, '0'),
                 "Region": user["region"],
                 "Captcha": user["captcha_answer"],
@@ -286,7 +236,7 @@ async def handle_login(chat_id):
             }
         else:
             params = {
-                "Hash": user["name"],
+                "Hash": user["_name"],
                 "Code": user["passport"],
                 "Region": user["region"],
                 "Captcha": user["captcha_answer"],
@@ -296,7 +246,7 @@ async def handle_login(chat_id):
         response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
         token = session.cookies.get_dict()["Participant"]
 
-        users_table.insert({
+        await users_table.insert({
             "chat_id": chat_id,
             "region": user["region"],
             "token": token,
@@ -305,14 +255,12 @@ async def handle_login(chat_id):
             "login_date": int(datetime.now().timestamp())
         })
 
-        login_table.delete(chat_id)
+        await login_table.delete(chat_id)
         with open('log_login_activity.txt', 'a') as logfile:
             logfile.write("%s, %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
         return 204
     except KeyError:
         return 450
-    except NotFoundError:
-        return 451
     except requests.RequestException:
         return 452
 
@@ -321,11 +269,9 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
     if attempts == 0:
         return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
     try:
-        date = users_table.get(chat_id)["exams_date"]
-        if not date or not is_user_request or datetime.now().timestamp() - date > 15:
-            if is_user_request:
-                users_table.update(chat_id, {"exams_date": int(datetime.now().timestamp())})
-            token = users_table.get(chat_id)["token"]
+        if "TODO: make throttling here":
+            user = await users_table.get(chat_id)
+            token = user["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
             response = await requests.get(EGE_URL, headers=headers, timeout=5)
@@ -382,10 +328,10 @@ def check_threshold(mark, mark_threshold, title):
 
 # проверка на наличие обновлений с прошлой проверки
 # запускает рассылку, если необходимо
-def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
-    try:
+async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
+    user = await users_table.get(chat_id)
+    if user:
         # update hash (and exams list) in 'users.db'
-        user = users_table.get(chat_id)
         old_hash = user["exams_hash"]
         region = user["region"]
 
@@ -396,24 +342,20 @@ def check_results_updates(chat_id, response, callback_bot=None, is_user_request=
 
         if old_hash != new_hash:  # результаты обновились
             if is_user_request:
-                users_table.update(chat_id, {
+                await users_table.update(chat_id, {
                     "exams": str(list(exams)),
-                    "exams_hash": new_hash,
-                    "exams_date": int(datetime.now().timestamp())
+                    "exams_hash": new_hash
                 })
-                on_results_updated(response, region, chat_id, callback_bot)
+                await on_results_updated(response, region, chat_id, callback_bot)
             else:
-                on_results_updated(response, region, 1, callback_bot)
+                await on_results_updated(response, region, 1, callback_bot)
             return True
-        else:
-            return False
 
-    except NotFoundError:  # user logged out
+    else:  # user logged out
         logging.log(logging.WARNING, "User: %d results after log out" % chat_id)
-        return False
 
 
-def on_results_updated(response, region, except_from_id=1, callback_bot=None):
+async def on_results_updated(response, region, except_from_id=1, callback_bot=None):
     for exam in response:
         title = exam["Subject"]
         exam_id = exam["ExamId"]
@@ -427,13 +369,15 @@ def on_results_updated(response, region, except_from_id=1, callback_bot=None):
 
         if (has_result and not is_hidden) or int(mark):  # есть ли результат
             if exam_id not in ignored_exams and not is_composition:  # проверка на thrown/composition
-                region_exams = set(ast.literal_eval(regions_table.get(region)["notified_exams"]))
-                if exam_id not in region_exams:  # проверка на существующее оповещение
-                    region_exams.add(exam_id)
-                    regions_table.update(region, {"notified_exams": str(list(region_exams))})
+                region_info = await regions_table.get(region)
+                if region_info:
+                    region_exams = set(ast.literal_eval(region_info["notified_exams"]))
+                    if exam_id not in region_exams:  # проверка на существующее оповещение
+                        region_exams.add(exam_id)
+                        await regions_table.update(region, {"notified_exams": str(list(region_exams))})
 
-                    logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
-                    asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
+                        logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
+                        asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
 
 
 async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
@@ -448,7 +392,7 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
     markup = types.InlineKeyboardMarkup().add(markup_button1)
     message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % title.upper()
 
-    for user in users_table.rows_where("region = ? AND notify = 1", [region]):
+    for user in await users_table.rows_where("region = $1 AND notify = 1", region):
         chat_id = user["chat_id"]
         if bot:
             try:
@@ -483,10 +427,10 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
                                                                  title, users_count, time_stop - time))
 
 
-def parse_results_message(chat_id, response, is_first=False, callback_bot=None):
+async def parse_results_message(chat_id, response, is_first=False, callback_bot=None):
     time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
 
-    updates = check_results_updates(chat_id, response, callback_bot)
+    updates = await check_results_updates(chat_id, response, callback_bot)
 
     mark_sum = 0
     show_sum = True
