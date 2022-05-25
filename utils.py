@@ -11,13 +11,15 @@ import requests_async as requests
 from datetime import datetime
 from hashlib import md5
 from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
-    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, relax_timer
-
+    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, proxy_url, relax_timer
 from db_worker import DbConnection, DbTable
 from pypika import Column
-
 from json.decoder import JSONDecodeError
 from aiogram import types, exceptions
+
+proxies = None
+if proxy_url:
+    proxies = {'http': proxy_url, 'https': proxy_url}
 
 db_conn = DbConnection().conn
 
@@ -210,7 +212,7 @@ def handle_captchaDelete(chat_id):
 
 async def handle_captchaGet(chat_id):
     try:
-        response = await requests.get(EGE_TOKEN_URL, timeout=5)
+        response = await requests.get(EGE_TOKEN_URL, timeout=5, proxies=proxies)
         await login_table.update(chat_id, {
             "captcha_token": response.json()["Token"]
         })
@@ -274,7 +276,7 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
             token = user["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
-            response = await requests.get(EGE_URL, headers=headers, timeout=5)
+            response = await requests.get(EGE_URL, headers=headers, timeout=5, proxies=proxies)
             if logs:
                 logging.log(logging.INFO, "User: %d results got" % chat_id)
                 with open('log_time_activity.txt', 'a') as logfile:
@@ -298,7 +300,7 @@ async def handle_get_results_json_token(token, attempts=5):
     try:
         headers = EGE_HEADERS.copy()
         headers["Cookie"] = "Participant=" + token
-        response = await requests.get(EGE_URL, headers=headers, timeout=5)
+        response = await requests.get(EGE_URL, headers=headers, timeout=5, proxies=proxies)
         return [0, response.json()["Result"]["Exams"]]
     except requests.RequestException:
         return await handle_get_results_json_token(token, attempts - 1)

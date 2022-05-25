@@ -18,3 +18,5 @@ EGE_TOKEN_URL = "https://checkege.rustest.ru/api/captcha"
 EGE_LOGIN_URL = "https://checkege.rustest.ru/api/participant/login"
 
 EGE_HEADERS = {"Cookie":'', "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36"}
+
+proxy_url = os.environ.get("PROXY_URL")
