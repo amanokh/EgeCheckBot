@@ -1,12 +1,13 @@
 import asyncio
 import logging
 # import auto_checker
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter
-
-from common import strings, buttons
 import config
 import utils
+
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter
+from common import strings, buttons
+from random import choice
 
 logging.basicConfig(level=logging.INFO)
 
@@ -330,9 +331,14 @@ async def btn_donate(message: types.Message):
 
 @dp.message_handler(content_types=['sticker'])
 async def sticker_answer(message: types.Message):
+    stickers = ['CAACAgIAAxkBAAEP-Zxij1NtuP32jpseIMLLMgH_qyuPsgACbRQAAvh48Ev_35tLbqKxRyQE',
+                'CAACAgIAAxkDAAG-w9Bij1K0doS19MChTh1Zv5XuiUY_vQAC9RQAAvA6-UgpYiz-I0hBSSQE',
+                'CAACAgIAAxkBAAEP-ahij1QLj4Eh4L_U1DeTbI2MCu4CTAAC_hEAAo6E8Eup_sGzXXLhQCQE',
+                'CAACAgQAAxkBAAEP-apij1RAmV0JdJfhjzRzyb0kh0beqQACTAEAAqghIQZjKrRWscYWyCQE',
+                'CAACAgIAAxkBAAEP-axij1RxuV6WmfbixVXdsSHHBG4ppwAClgsAAgGxSUrXP-UOB9uGfyQE']
     if not relax:
         await bot.send_sticker(message.chat.id,
-                               sticker="CAACAgIAAxkDAAG-w9Bij1K0doS19MChTh1Zv5XuiUY_vQAC9RQAAvA6-UgpYiz-I0hBSSQE")
+                               sticker=choice(stickers))
 
 
 @dp.message_handler()
