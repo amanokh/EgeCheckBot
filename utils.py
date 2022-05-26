@@ -262,7 +262,7 @@ async def handle_login(chat_id):
             "exams": "[]",
             "login_date": int(datetime.now().timestamp())
         })
-        user_stats_hash = md5('%d%s'.format(chat_id, user["_name"]).encode()).hexdigest()
+        user_stats_hash = md5('{}{}'.format(chat_id, user["_name"]).encode()).hexdigest()
 
         try:
             await stats_table.insert({
