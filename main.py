@@ -46,7 +46,8 @@ async def bot_send_results(chat_id, is_first=False):
 
             elif len(response[1]):  # else answer not null -> send response
                 await bot.send_message(chat_id,
-                                       await utils.parse_results_message(chat_id, response[1], is_first, callback_bot=bot),
+                                       await utils.get_results_message(chat_id, response[1], is_first,
+                                                                       callback_bot=bot),
                                        parse_mode="MARKDOWN", reply_markup=buttons.markup_inline_results())
 
             elif response[0] != 1:  # response is Null
@@ -66,13 +67,13 @@ async def bot_send_results(chat_id, is_first=False):
 
 async def bot_login_attempt(chat_id):
     if await utils.user_get_login_status(chat_id) == "login":
-        shelve_answer = await utils.handle_login(chat_id)
+        shelve_answer, user_hash = await utils.handle_login(chat_id)
 
         if shelve_answer == 204:
             logging.log(logging.INFO, "User: %d user authened" % chat_id)
             notify_status = await utils.user_get_notify_status(chat_id)
             await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(notify_status))
-            await bot_send_results(chat_id, is_first=True)
+            await bot_send_results(chat_id, is_first=user_hash)
 
         elif shelve_answer == 450:
             # logging.log(logging.WARNING, "User: %d 450err" % chat_id)
@@ -163,7 +164,7 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
             if response[0] and response[0] != 1:  # throws Error
                 text = response[0]
             elif len(response[1]):  # else answer not null -> send response
-                text = await utils.parse_results_message(chat_id, response[1], callback_bot=bot)
+                text = await utils.get_results_message(chat_id, response[1], callback_bot=bot)
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 

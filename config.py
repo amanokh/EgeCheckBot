@@ -12,6 +12,7 @@ db_table_users = "users"
 db_table_login = "login"
 db_table_regions = "regions"
 db_table_examsinfo = "exams_info"
+db_table_stats = "stats"
 
 EGE_URL = "https://checkege.rustest.ru/api/exam"
 EGE_TOKEN_URL = "https://checkege.rustest.ru/api/captcha"

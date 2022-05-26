@@ -8,10 +8,11 @@ import sys
 import asyncio
 import shelve
 
+from asyncpg.exceptions import UniqueViolationError
 from datetime import datetime
 from hashlib import md5
 from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
-    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, proxy_url, relax_timer
+    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, db_table_stats, proxy_url, relax_timer
 from db_worker import DbConnection, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
@@ -52,16 +53,22 @@ examsinfo_table = DbTable(db_conn, db_table_examsinfo,
                            Column("res_date_predicted", "text")),
                           pk_id="exam_id")
 
+stats_table = DbTable(db_conn, db_table_stats,
+                      (Column("user_hash", "text", nullable=False),
+                       Column("first_login_time", "int", nullable=False),
+                       Column("exams", "text")),
+                      pk_id="user_hash")
+
 
 async def table_count():
     try:
         users_count = await users_table.count()
         login_count = await login_table.count()
-
         exams_count = await examsinfo_table.count()
+        total_users = await stats_table.count()
 
-        return "Users logged: %d, not logged: %d, Parsed exams: %d, Server time: %s" % (
-            users_count, login_count, exams_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
+        return "Users logged: %d, not logged: %d, Total users: %d, Parsed exams: %d, Server time: %s" % (
+            users_count, login_count, total_users, exams_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
     except Exception as e:
         return str(e)
 
@@ -255,15 +262,22 @@ async def handle_login(chat_id):
             "exams": "[]",
             "login_date": int(datetime.now().timestamp())
         })
+        user_stats_hash = md5('%d%s'.format(chat_id, user["_name"]).encode()).hexdigest()
+
+        try:
+            await stats_table.insert({
+                "user_hash": user_stats_hash,
+                "first_login_time": int(datetime.now().timestamp())
+            })
+        except UniqueViolationError:
+            pass
 
         await login_table.delete(chat_id)
-        with open('log_login_activity.txt', 'a') as logfile:
-            logfile.write("%s, %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
-        return 204
+        return 204, user_stats_hash
     except KeyError:
-        return 450
+        return 450, ""
     except aiohttp.ClientConnectionError:
-        return 452
+        return 452, ""
 
 
 async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_request=True):
@@ -281,8 +295,6 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
                 json = await response.json()
             if logs:
                 logging.log(logging.INFO, "User: %d results got" % chat_id)
-                with open('log_time_activity.txt', 'a') as logfile:
-                    logfile.write("%s %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
 
             return [0, json["Result"]["Exams"]]
         else:
@@ -332,7 +344,7 @@ def check_threshold(mark, mark_threshold, title):
 
 # проверка на наличие обновлений с прошлой проверки
 # запускает рассылку, если необходимо
-async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
+async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True, is_first=False):
     user = await users_table.get(chat_id)
     if user:
         # update hash (and exams list) in 'users.db'
@@ -344,6 +356,9 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
         for exam in response:
             exams.add(exam["ExamId"])
 
+        if is_first:
+            await stats_table.update(is_first, {"exams": str(list(exams))})
+
         if old_hash != new_hash:  # результаты обновились
             if is_user_request:
                 await users_table.update(chat_id, {
@@ -354,6 +369,7 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
             else:
                 await on_results_updated(response, region, 1, callback_bot)
             return True
+
 
     else:  # user logged out
         logging.log(logging.WARNING, "User: %d results after log out" % chat_id)
@@ -431,10 +447,10 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
                                                                  title, users_count, time_stop - time))
 
 
-async def parse_results_message(chat_id, response, is_first=False, callback_bot=None):
+async def get_results_message(chat_id, response, is_first=False, callback_bot=None):
     time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
 
-    updates = await check_results_updates(chat_id, response, callback_bot)
+    updates = await check_results_updates(chat_id, response, callback_bot, is_first=is_first)
 
     mark_sum = 0
     show_sum = True
