@@ -20,7 +20,7 @@ from aiogram import types, exceptions
 db_conn = DbConnection().conn
 
 users_table = DbTable(db_conn, db_table_users,
-                      (Column("chat_id", "int", nullable=False),
+                      (Column("chat_id", "bigint", nullable=False),
                        Column("region", "int", nullable=False),
                        Column("notify", "int", nullable=False, default=1),
                        Column("token", "text", nullable=False),
@@ -29,7 +29,7 @@ users_table = DbTable(db_conn, db_table_users,
                        Column("exams_hash", "text")),
                       pk_id="chat_id")
 login_table = DbTable(db_conn, db_table_login,
-                      (Column("chat_id", "int", nullable=False),
+                      (Column("chat_id", "bigint", nullable=False),
                        Column("status", "text", nullable=False),
                        Column("_name", "text"),
                        Column("region", "int"),
