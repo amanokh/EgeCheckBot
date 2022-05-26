@@ -332,7 +332,7 @@ async def btn_donate(message: types.Message):
 async def sticker_answer(message: types.Message):
     if not relax:
         await bot.send_sticker(message.chat.id,
-                               sticker="AAMCAgADGQEAAQprPWDLi_w_C1-veWxNoEK41yaz5ol1AAK0AAPA-wgAAfl2_ploBMcDh8pcDwAEAQAHbQADKU4AAh8E")
+                               sticker="CAACAgIAAxkDAAG-w9Bij1K0doS19MChTh1Zv5XuiUY_vQAC9RQAAvA6-UgpYiz-I0hBSSQE")
 
 
 @dp.message_handler()
