@@ -1,3 +1,4 @@
+import aiohttp
 import os
 import logging
 import base64
@@ -6,7 +7,6 @@ import ast
 import sys
 import asyncio
 import shelve
-import requests_async as requests
 
 from datetime import datetime
 from hashlib import md5
@@ -16,10 +16,6 @@ from db_worker import DbConnection, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
 from aiogram import types, exceptions
-
-proxies = None
-if proxy_url:
-    proxies = {'http': proxy_url, 'https': proxy_url}
 
 db_conn = DbConnection().conn
 
@@ -212,14 +208,17 @@ def handle_captchaDelete(chat_id):
 
 async def handle_captchaGet(chat_id):
     try:
-        response = await requests.get(EGE_TOKEN_URL, timeout=5, proxies=proxies)
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(EGE_TOKEN_URL, timeout=5, proxy=proxy_url)
+            json = await response.json()
+
         await login_table.update(chat_id, {
-            "captcha_token": response.json()["Token"]
+            "captcha_token": json["Token"]
         })
         with open("_captcha" + str(chat_id), "wb") as f:
-            f.write(base64.b64decode(response.json()["Image"]))
-        return response.json()
-    except (requests.RequestException, AttributeError):
+            f.write(base64.b64decode(json["Image"]))
+        return json
+    except (aiohttp.ClientConnectionError, AttributeError):
         return None
     except:
         return None
@@ -244,9 +243,9 @@ async def handle_login(chat_id):
                 "Captcha": user["captcha_answer"],
                 "Token": user["captcha_token"]
             }
-        session = requests.Session()
-        response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
-        token = session.cookies.get_dict()["Participant"]
+        async with aiohttp.ClientSession() as session:
+            response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
+            token = response.cookies["Participant"].value
 
         await users_table.insert({
             "chat_id": chat_id,
@@ -263,7 +262,7 @@ async def handle_login(chat_id):
         return 204
     except KeyError:
         return 450
-    except requests.RequestException:
+    except aiohttp.ClientConnectionError:
         return 452
 
 
@@ -276,17 +275,20 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
             token = user["token"]
             headers = EGE_HEADERS.copy()
             headers["Cookie"] = "Participant=" + token
-            response = await requests.get(EGE_URL, headers=headers, timeout=5, proxies=proxies)
+
+            async with aiohttp.ClientSession() as session:
+                response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
+                json = await response.json()
             if logs:
                 logging.log(logging.INFO, "User: %d results got" % chat_id)
                 with open('log_time_activity.txt', 'a') as logfile:
                     logfile.write("%s %d\n" % (datetime.utcnow().strftime("%D, %H:%M:%S"), chat_id))
 
-            return [0, response.json()["Result"]["Exams"]]
+            return [0, json["Result"]["Exams"]]
         else:
             logging.log(logging.WARNING, "User: %d results UNSUCCESSFUL: unlogged" % chat_id)
             return ["Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout."]
-    except requests.RequestException:
+    except aiohttp.ClientConnectionError:
         logging.log(logging.WARNING, str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
     except (KeyError, JSONDecodeError):
@@ -300,9 +302,11 @@ async def handle_get_results_json_token(token, attempts=5):
     try:
         headers = EGE_HEADERS.copy()
         headers["Cookie"] = "Participant=" + token
-        response = await requests.get(EGE_URL, headers=headers, timeout=5, proxies=proxies)
-        return [0, response.json()["Result"]["Exams"]]
-    except requests.RequestException:
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
+            json = await response.json()
+        return [0, json["Result"]["Exams"]]
+    except aiohttp.ClientConnectionError:
         return await handle_get_results_json_token(token, attempts - 1)
     except (KeyError, JSONDecodeError):
         return await handle_get_results_json_token(token, attempts - 1)
