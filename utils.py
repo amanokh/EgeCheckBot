@@ -56,7 +56,8 @@ examsinfo_table = DbTable(db_conn, db_table_examsinfo,
 stats_table = DbTable(db_conn, db_table_stats,
                       (Column("user_hash", "text", nullable=False),
                        Column("first_login_time", "int", nullable=False),
-                       Column("exams", "text")),
+                       Column("exams", "text"),
+                       Column("region", "int")),
                       pk_id="user_hash")
 
 
@@ -67,7 +68,7 @@ async def table_count():
         exams_count = await examsinfo_table.count()
         total_users = await stats_table.count()
 
-        return "Users logged: %d, not logged: %d, Total users: %d, Parsed exams: %d, Server time: %s" % (
+        return "Users logged: %d, not logged: %d, Total unique users: %d, Parsed exams: %d, Server time: %s" % (
             users_count, login_count, total_users, exams_count, datetime.utcnow().strftime("%D, %H:%M:%S UTC"))
     except Exception as e:
         return str(e)
@@ -267,7 +268,8 @@ async def handle_login(chat_id):
         try:
             await stats_table.insert({
                 "user_hash": user_stats_hash,
-                "first_login_time": int(datetime.now().timestamp())
+                "first_login_time": int(datetime.now().timestamp()),
+                "region": user["region"]
             })
         except UniqueViolationError:
             pass
