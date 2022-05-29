@@ -1,2 +1,2 @@
 worker: python main.py
-worker: python maintenance.py
+maintenance: python maintenance.py
