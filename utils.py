@@ -26,7 +26,7 @@ users_table = DbTable(db_conn, db_table_users,
                        Column("notify", "int", nullable=False, default=1),
                        Column("token", "text", nullable=False),
                        Column("login_date", "int"),
-                       Column("exams", "text"),
+                       Column("exams", "int[]", default="{}"),
                        Column("exams_hash", "text")),
                       pk_id="chat_id")
 login_table = DbTable(db_conn, db_table_login,
@@ -41,8 +41,8 @@ login_table = DbTable(db_conn, db_table_login,
 
 regions_table = DbTable(db_conn, db_table_regions,
                         (Column("region", "int", nullable=False),
-                         Column("exams", "text", default="[]"),
-                         Column("notified_exams", "text", default="[]")),
+                         Column("exams", "int[]", default="{}"),
+                         Column("notified_exams", "int[]", default="{}")),
                         pk_id="region")
 
 examsinfo_table = DbTable(db_conn, db_table_examsinfo,
@@ -56,7 +56,7 @@ examsinfo_table = DbTable(db_conn, db_table_examsinfo,
 stats_table = DbTable(db_conn, db_table_stats,
                       (Column("user_hash", "text", nullable=False),
                        Column("first_login_time", "int", nullable=False),
-                       Column("exams", "text"),
+                       Column("exams", "int[]"),
                        Column("region", "int")),
                       pk_id="user_hash")
 
@@ -188,9 +188,9 @@ async def regions_update_exams(region, response):
     if region_info:
         exams_db = set(ast.literal_eval(region_info["exams"]))
         exams.update(exams_db)
-        await regions_table.update(region, {"region": region, "exams": str(list(exams))})
+        await regions_table.update(region, {"region": region, "exams": str(exams)})
     else:
-        await regions_table.insert({"region": region, "exams": str(list(exams))})
+        await regions_table.insert({"region": region, "exams": str(exams)})
 
 
 async def examsinfo_update(response):
@@ -260,7 +260,7 @@ async def handle_login(chat_id):
             "region": user["region"],
             "token": token,
             "notify": 1,
-            "exams": "[]",
+            "exams": "{}",
             "login_date": int(datetime.now().timestamp())
         })
         user_stats_hash = md5('{}{}'.format(chat_id, user["_name"]).encode()).hexdigest()
@@ -359,12 +359,12 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
             exams.add(exam["ExamId"])
 
         if is_first:
-            await stats_table.update(is_first, {"exams": str(list(exams))})
+            await stats_table.update(is_first, {"exams": str(exams)})
 
         if old_hash != new_hash:  # результаты обновились
             if is_user_request:
                 await users_table.update(chat_id, {
-                    "exams": str(list(exams)),
+                    "exams": str(exams),
                     "exams_hash": new_hash
                 })
                 await on_results_updated(response, region, chat_id, callback_bot)
@@ -387,7 +387,7 @@ async def on_results_updated(response, region, except_from_id=1, callback_bot=No
         has_result = exam["HasResult"]
         mark = exam["TestMark"]
 
-        ignored_exams = []
+        ignored_exams = set()
 
         if (has_result and not is_hidden) or int(mark):  # есть ли результат
             if exam_id not in ignored_exams and not is_composition:  # проверка на thrown/composition
@@ -396,7 +396,7 @@ async def on_results_updated(response, region, except_from_id=1, callback_bot=No
                     region_exams = set(ast.literal_eval(region_info["notified_exams"]))
                     if exam_id not in region_exams:  # проверка на существующее оповещение
                         region_exams.add(exam_id)
-                        await regions_table.update(region, {"notified_exams": str(list(region_exams))})
+                        await regions_table.update(region, {"notified_exams": str(region_exams)})
 
                         logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
                         asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
@@ -420,9 +420,9 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
             try:
                 user_exams_string = user["exams"]
                 if user_exams_string:
-                    user_exams = ast.literal_eval(user_exams_string)
+                    user_exams = set(ast.literal_eval(user_exams_string))
                 else:
-                    user_exams = []
+                    user_exams = set()
                 if chat_id != except_from_id and exam_id in user_exams:
                     try:
                         users_count += 1
