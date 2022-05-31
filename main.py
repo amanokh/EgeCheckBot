@@ -39,7 +39,7 @@ async def bot_send_captcha(chat_id):
 
 
 # Results get handler:
-async def bot_send_results(chat_id, is_first=False):
+async def bot_send_results(chat_id, is_first_user_hash=False):
     if await utils.user_check_logged(chat_id):
         try:
             err_msg, response = await utils.handle_get_results_json(chat_id)
@@ -47,7 +47,8 @@ async def bot_send_results(chat_id, is_first=False):
             if err_msg:  # throws Error
                 text = err_msg
             elif response:  # else answer not null -> send response
-                text = await utils.get_results_message(chat_id, response, is_first, callback_bot=bot)
+                updates = await utils.check_results_updates(chat_id, response, callback_bot=bot)
+                text = await utils.parse_results_message(response, updates, is_first_user_hash)
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
@@ -56,10 +57,11 @@ async def bot_send_results(chat_id, is_first=False):
                                    parse_mode="MARKDOWN",
                                    reply_markup=buttons.markup_inline_results())
 
-            if is_first:
+            if is_first_user_hash:
                 region = await utils.user_get_region(chat_id)
                 await utils.regions_update_exams(region, response)
                 await utils.examsinfo_update(response)
+                await utils.pass_stats_exams_by_user_hash(is_first_user_hash, response)
         except RetryAfter:
             logger.warning("User: %d FLOOD CONTROL" % chat_id)
 
@@ -72,21 +74,19 @@ async def bot_login_attempt(chat_id):
             logger.info("User: %d user authened" % chat_id)
             notify_status = await utils.user_get_notify_status(chat_id)
             await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(notify_status))
-            await bot_send_results(chat_id, is_first=user_hash)
+            await bot_send_results(chat_id, is_first_user_hash=user_hash)
 
         elif shelve_answer == 450:
-            # logger.warning("User: %d 450err" % chat_id)
-
+            logger.debug("User: %d 450err" % chat_id)
             await bot.send_message(chat_id, strings.login_wrong_data, reply_markup=buttons.markup_inline_retry_login())
 
         elif shelve_answer == 452:
-            # logger.warning("User: %d 452err" % chat_id)
-
+            logger.debug("User: %d 452err" % chat_id)
             await bot.send_message(chat_id,
                                    strings.err_noans_wrong_data,
                                    reply_markup=buttons.markup_inline_retry_login())
         else:
-            logger.warning("User: %d ??err" % chat_id)
+            logger.debug("User: %d ??err" % chat_id)
             await bot.send_message(chat_id, strings.err_results_unexpected % shelve_answer)
             await utils.user_clear(chat_id)
             await utils.user_login_stop(chat_id)
@@ -160,7 +160,8 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
             if err_msg:  # throws Error
                 text = err_msg
             elif response:  # else answer not null -> send response
-                text = await utils.get_results_message(chat_id, response, callback_bot=bot)
+                updates = await utils.check_results_updates(chat_id, response, callback_bot=bot)
+                text = await utils.parse_results_message(response, updates)
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 

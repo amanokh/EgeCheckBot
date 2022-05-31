@@ -256,32 +256,43 @@ async def handle_login(chat_id):
             }
         async with aiohttp.ClientSession() as session:
             response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
+
+        if "Participant" in response.cookies:
             token = response.cookies["Participant"].value
 
-        await users_table.insert({
-            "chat_id": chat_id,
-            "region": user["region"],
-            "token": token,
-            "notify": 1,
-            "login_date": int(datetime.now().timestamp())
-        })
-        user_stats_hash = md5('{}{}'.format(chat_id, user["_name"]).encode()).hexdigest()
-
-        try:
-            await stats_table.insert({
-                "user_hash": user_stats_hash,
-                "first_login_time": int(datetime.now().timestamp()),
-                "region": user["region"]
+            await users_table.insert({
+                "chat_id": chat_id,
+                "region": user["region"],
+                "token": token,
+                "notify": 1,
+                "login_date": int(datetime.now().timestamp())
             })
-        except UniqueViolationError:
-            pass
 
-        await login_table.delete(chat_id)
-        return 204, user_stats_hash
-    except KeyError:
-        return 450, ""
+            user_stats_hash = md5('{}{}'.format(chat_id, user["_name"]).encode()).hexdigest()
+            try:
+                await stats_table.insert({
+                    "user_hash": user_stats_hash,
+                    "first_login_time": int(datetime.now().timestamp()),
+                    "region": user["region"]
+                })
+            except UniqueViolationError:
+                pass
+
+            await login_table.delete(chat_id)
+
+            return 204, user_stats_hash
+        else:
+            return 450, ""
     except aiohttp.ClientConnectionError:
         return 452, ""
+
+
+async def pass_stats_exams_by_user_hash(user_hash, response):
+    exams = set()
+    for exam in response:
+        exams.add(exam["ExamId"])
+
+    await stats_table.update(user_hash, {"exams": exams})
 
 
 async def handle_get_results_json(chat_id, attempts=5):
@@ -347,7 +358,7 @@ def check_threshold(mark, mark_threshold, title):
 
 # проверка на наличие обновлений с прошлой проверки
 # запускает рассылку, если необходимо
-async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True, is_first=False):
+async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
     user = await users_table.get(chat_id)
     if user:
         # update hash (and exams list) in 'users.db'
@@ -358,9 +369,6 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
         exams = set()
         for exam in response:
             exams.add(exam["ExamId"])
-
-        if is_first:
-            await stats_table.update(is_first, {"exams": exams})
 
         if old_hash != new_hash:  # результаты обновились
             if is_user_request:
@@ -373,9 +381,55 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
                 await on_results_updated(response, region, 1, callback_bot)
             return True
 
-
     else:  # user logged out
         logger.warning("User: %d results after log out" % chat_id)
+
+
+async def parse_results_message(response, updates, is_first=False):
+    time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
+
+    mark_sum = 0
+    show_sum = True
+
+    # message = "🔥 *Наблюдается большая нагрузка на сервер. Из-за ограничений Telegram результаты можно запрашивать только раз в минуту. Пожалуйста, делайте запросы реже и подключите уведомления о новых результатах!*\n\n"
+    message = ""
+
+    if is_first:
+        message += "*Текущие результаты:* (на %s МСК)\n\n" % time
+    elif updates:
+        message += "*⚡️Есть обновления⚡️\n*(на %s МСК)\n\n" % time
+    else:
+        message += "*Текущие результаты:*\nОбновлений нет (на %s МСК)\n\n" % time
+
+    for exam in response:
+        title = exam["Subject"]
+        is_composition = exam["IsComposition"]
+        is_hidden = exam["IsHidden"]
+        has_result = exam["HasResult"]
+        mark = exam["TestMark"]
+        mark_threshold = exam["MinMark"]
+
+        if has_result and not is_hidden:
+            if is_composition:
+                mark_string = "*Зачёт* ✅" if mark == 1 else "*Незачёт* ❗️"
+            else:
+                mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark, mark_threshold, title) + "*"
+                mark_sum += int(mark)
+        elif int(mark):
+            mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark,
+                                                                               mark_threshold,
+                                                                               title) + "* _(результат скрыт)_"
+            show_sum = False
+        else:
+            mark_string = "_нет результата_"
+            show_sum = False
+
+        message += title + " — " + mark_string + "\n"
+
+    if show_sum:
+        message += "\n_Сумма по всем предметам_ — *" + str(mark_sum) + count_case(mark_sum) + "*"
+
+    return message
 
 
 async def on_results_updated(response, region, except_from_id=1, callback_bot=None):
@@ -447,52 +501,3 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
         logfile.write(
             "%s MAILER FINISHED %d %s %d users, in %f secs\n" % (datetime.now().strftime("%D %H:%M:%S"), region,
                                                                  title, users_count, time_stop - time))
-
-
-async def get_results_message(chat_id, response, is_first=False, callback_bot=None):
-    time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
-
-    updates = await check_results_updates(chat_id, response, callback_bot, is_first=is_first)
-
-    mark_sum = 0
-    show_sum = True
-
-    # message = "🔥 *Наблюдается большая нагрузка на сервер. Из-за ограничений Telegram результаты можно запрашивать только раз в минуту. Пожалуйста, делайте запросы реже и подключите уведомления о новых результатах!*\n\n"
-    message = ""
-
-    if is_first:
-        message += "*Текущие результаты:* (на %s МСК)\n\n" % time
-    elif updates:
-        message += "*⚡️Есть обновления⚡️\n*(на %s МСК)\n\n" % time
-    else:
-        message += "*Текущие результаты:*\nОбновлений нет (на %s МСК)\n\n" % time
-
-    for exam in response:
-        title = exam["Subject"]
-        is_composition = exam["IsComposition"]
-        is_hidden = exam["IsHidden"]
-        has_result = exam["HasResult"]
-        mark = exam["TestMark"]
-        mark_threshold = exam["MinMark"]
-
-        if has_result and not is_hidden:
-            if is_composition:
-                mark_string = "*Зачёт* ✅" if mark == 1 else "*Незачёт* ❗️"
-            else:
-                mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark, mark_threshold, title) + "*"
-                mark_sum += int(mark)
-        elif int(mark):
-            mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark,
-                                                                               mark_threshold,
-                                                                               title) + "* _(результат скрыт)_"
-            show_sum = False
-        else:
-            mark_string = "_нет результата_"
-            show_sum = False
-
-        message += title + " — " + mark_string + "\n"
-
-    if show_sum:
-        message += "\n_Сумма по всем предметам_ — *" + str(mark_sum) + count_case(mark_sum) + "*"
-
-    return message
