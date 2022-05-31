@@ -10,17 +10,9 @@ from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, Inv
 from common import strings, buttons
 from random import choice
 
-logger = logging.getLogger("ege-check-bot.main")
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
-c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler('main.log')
-
-c_handler.setFormatter(logging.Formatter('%(name)s:%(levelname)s:%(message)s'))
-f_handler.setFormatter(logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s'))
-
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
 
 # Initialize bot and dispatcher
 bot = Bot(token=config.API_TOKEN)

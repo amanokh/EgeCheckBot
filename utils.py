@@ -17,16 +17,9 @@ from pypika import Column
 from json.decoder import JSONDecodeError
 from aiogram import types, exceptions
 
-logger = logging.getLogger("ege-check-bot.utils")
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
-c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler('utils.log')
-
-c_handler.setFormatter(logging.Formatter('%(name)s:%(levelname)s:%(message)s'))
-f_handler.setFormatter(logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s'))
-
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
 
 db_conn = DbConnection().conn
 
