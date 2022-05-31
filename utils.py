@@ -280,9 +280,9 @@ async def handle_login(chat_id):
         return 452, ""
 
 
-async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_request=True):
+async def handle_get_results_json(chat_id, attempts=5):
     if attempts == 0:
-        return ["Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз."]
+        return "Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз.", None
     try:
         user = await users_table.get(chat_id)
         if user:
@@ -293,19 +293,18 @@ async def handle_get_results_json(chat_id, attempts=5, logs=True, is_user_reques
             async with aiohttp.ClientSession() as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
                 json = await response.json()
-            if logs:
-                logging.log(logging.INFO, "User: %d results got" % chat_id)
+            logging.log(logging.INFO, "User: %d results got" % chat_id)
 
-            return [0, json["Result"]["Exams"]]
+            return "", json["Result"]["Exams"]
         else:
             logging.log(logging.WARNING, "User: %d results UNSUCCESSFUL: unlogged" % chat_id)
-            return ["Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout."]
+            return "Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout.", None
     except aiohttp.ClientConnectionError:
         logging.log(logging.WARNING, str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
-        return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
+        return await handle_get_results_json(chat_id, attempts - 1)
     except (KeyError, JSONDecodeError):
         logging.log(logging.WARNING, str(chat_id) + str(response.content) + " attempt: %d" % attempts)
-        return await handle_get_results_json(chat_id, attempts - 1, logs=logs, is_user_request=is_user_request)
+        return await handle_get_results_json(chat_id, attempts - 1)
 
 
 async def handle_get_results_json_token(token, attempts=5):

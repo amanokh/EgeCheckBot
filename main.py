@@ -39,30 +39,26 @@ async def bot_send_captcha(chat_id):
 async def bot_send_results(chat_id, is_first=False):
     if await utils.user_check_logged(chat_id):
         try:
-            response = await utils.handle_get_results_json(chat_id)
+            err_msg, response = await utils.handle_get_results_json(chat_id)
 
-            if response[0] and response[0] != 1:  # throws Error
-                await bot.send_message(chat_id, response[0], reply_markup=buttons.markup_inline_results())
+            if err_msg:  # throws Error
+                text = err_msg
+            elif response:  # else answer not null -> send response
+                text = await utils.get_results_message(chat_id, response, is_first, callback_bot=bot)
+            else:  # response is Null
+                text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
-            elif len(response[1]):  # else answer not null -> send response
-                await bot.send_message(chat_id,
-                                       await utils.get_results_message(chat_id, response[1], is_first,
-                                                                       callback_bot=bot),
-                                       parse_mode="MARKDOWN", reply_markup=buttons.markup_inline_results())
-
-            elif response[0] != 1:  # response is Null
-                await bot.send_message(chat_id, "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже!")
+            await bot.send_message(chat_id,
+                                   text,
+                                   parse_mode="MARKDOWN",
+                                   reply_markup=buttons.markup_inline_results())
 
             if is_first:
                 region = await utils.user_get_region(chat_id)
-                await utils.regions_update_exams(region, response[1])
-                await utils.examsinfo_update(response[1])
+                await utils.regions_update_exams(region, response)
+                await utils.examsinfo_update(response)
         except RetryAfter:
             logging.log(logging.WARNING, "User: %d FLOOD CONTROL" % chat_id)
-            global relax
-            relax = True
-            logging.log(logging.WARNING, "Dispatcher: Relaxing enabled")
-
 
 
 async def bot_login_attempt(chat_id):
@@ -156,25 +152,21 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
     text = ""
 
     try:
-        resp = 0
-
         if await utils.user_check_logged(chat_id):
-            response = await utils.handle_get_results_json(chat_id)
-            resp = response[0]
-            if response[0] and response[0] != 1:  # throws Error
-                text = response[0]
-            elif len(response[1]):  # else answer not null -> send response
-                text = await utils.get_results_message(chat_id, response[1], callback_bot=bot)
+            err_msg, response = await utils.handle_get_results_json(chat_id)
+            if err_msg:  # throws Error
+                text = err_msg
+            elif response:  # else answer not null -> send response
+                text = await utils.get_results_message(chat_id, response, callback_bot=bot)
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
         await bot.answer_callback_query(callback_query.id)
-        if resp != 1:
-            await bot.edit_message_text(chat_id=callback_query.message.chat.id,
-                                        message_id=callback_query.message.message_id,
-                                        text=text,
-                                        parse_mode="MARKDOWN",
-                                        reply_markup=buttons.markup_inline_results())
+        await bot.edit_message_text(chat_id=callback_query.message.chat.id,
+                                    message_id=callback_query.message.message_id,
+                                    text=text,
+                                    parse_mode="MARKDOWN",
+                                    reply_markup=buttons.markup_inline_results())
     except MessageNotModified:
         pass
     except MessageTextIsEmpty:
