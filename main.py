@@ -2,6 +2,7 @@ import asyncio
 import logging
 # import auto_checker
 import config
+import os
 import utils
 
 from aiogram import Bot, Dispatcher, executor, types
@@ -9,7 +10,17 @@ from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, Inv
 from common import strings, buttons
 from random import choice
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ege-check-bot.main")
+logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler('main.log')
+
+c_handler.setFormatter(logging.Formatter('%(name)s:%(levelname)s:%(message)s'))
+f_handler.setFormatter(logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s'))
+
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
 
 # Initialize bot and dispatcher
 bot = Bot(token=config.API_TOKEN)
@@ -58,7 +69,7 @@ async def bot_send_results(chat_id, is_first=False):
                 await utils.regions_update_exams(region, response)
                 await utils.examsinfo_update(response)
         except RetryAfter:
-            logging.log(logging.WARNING, "User: %d FLOOD CONTROL" % chat_id)
+            logger.warning("User: %d FLOOD CONTROL" % chat_id)
 
 
 async def bot_login_attempt(chat_id):
@@ -66,24 +77,24 @@ async def bot_login_attempt(chat_id):
         shelve_answer, user_hash = await utils.handle_login(chat_id)
 
         if shelve_answer == 204:
-            logging.log(logging.INFO, "User: %d user authened" % chat_id)
+            logger.info("User: %d user authened" % chat_id)
             notify_status = await utils.user_get_notify_status(chat_id)
             await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(notify_status))
             await bot_send_results(chat_id, is_first=user_hash)
 
         elif shelve_answer == 450:
-            # logging.log(logging.WARNING, "User: %d 450err" % chat_id)
+            # logger.warning("User: %d 450err" % chat_id)
 
             await bot.send_message(chat_id, strings.login_wrong_data, reply_markup=buttons.markup_inline_retry_login())
 
         elif shelve_answer == 452:
-            # logging.log(logging.WARNING, "User: %d 452err" % chat_id)
+            # logger.warning("User: %d 452err" % chat_id)
 
             await bot.send_message(chat_id,
                                    strings.err_noans_wrong_data,
                                    reply_markup=buttons.markup_inline_retry_login())
         else:
-            logging.log(logging.WARNING, "User: %d ??err" % chat_id)
+            logger.warning("User: %d ??err" % chat_id)
             await bot.send_message(chat_id, strings.err_results_unexpected % shelve_answer)
             await utils.user_clear(chat_id)
             await utils.user_login_stop(chat_id)
@@ -95,7 +106,7 @@ async def clear_user(chat_id):
     shelve_result = is_user_cleaned or is_login_cleaned
     if shelve_result:
         await bot.send_message(chat_id, strings.clear_done, reply_markup=buttons.markup_init())
-        # logging.log(logging.INFO, "User: %s logout", chat_id)
+        # logger.info("User: %s logout", chat_id)
 
     else:
         await bot.send_message(chat_id, strings.clear_not_found, reply_markup=buttons.markup_init())
@@ -113,13 +124,13 @@ async def send_notify_region_site(chat_id, region):
 # Commands handlers:
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    logging.log(logging.INFO, message.chat.id)
+    logger.info(message.chat.id)
     shelve_result = await utils.user_check_logged(int(message.chat.id))
     if not relax:
         if shelve_result:
             await message.answer(strings.start_authed)
         else:
-            # logging.log(logging.INFO, "User: %s start", message.chat.id)
+            # logger.info("User: %s start", message.chat.id)
             await message.answer(strings.start_agree, reply_markup=buttons.markup_login(), parse_mode="MARKDOWN")
             await message.answer(strings.start_name)
             await utils.user_login_start(int(message.chat.id))
@@ -172,7 +183,7 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
     except MessageTextIsEmpty:
         pass
     except InvalidQueryID:
-        # logging.log(logging.WARNING, "User: %d results-->Invalid Query ID (callback)" % chat_id)
+        # logger.warning("User: %d results-->Invalid Query ID (callback)" % chat_id)
         pass
 
 
@@ -190,13 +201,13 @@ async def process_callback_regions_show(callback_query: types.CallbackQuery):
                                     parse_mode="MARKDOWN",
                                     reply_markup=markup)
     except MessageNotModified:
-        # logging.log(logging.WARNING, "User: %d regions-->MessageNotModified (callback)" % chat_id)
+        # logger.warning("User: %d regions-->MessageNotModified (callback)" % chat_id)
         pass
     except MessageTextIsEmpty:
-        # logging.log(logging.WARNING, "User: %d regions-->MessageTextIsEmpty (callback)" % chat_id)
+        # logger.warning("User: %d regions-->MessageTextIsEmpty (callback)" % chat_id)
         pass
     except InvalidQueryID:
-        # logging.log(logging.WARNING, "User: %d regions-->Invalid Query ID (callback)" % chat_id)
+        # logger.warning("User: %d regions-->Invalid Query ID (callback)" % chat_id)
         pass
 
 
@@ -214,13 +225,13 @@ async def process_callback_regions_hide(callback_query: types.CallbackQuery):
                                     text=strings.login_region,
                                     reply_markup=markup)
     except MessageNotModified:
-        # logging.log(logging.WARNING, "User: %d regions-->MessageNotModified (callback)" % chat_id)
+        # logger.warning("User: %d regions-->MessageNotModified (callback)" % chat_id)
         pass
     except MessageTextIsEmpty:
-        # logging.log(logging.WARNING, "User: %d regions-->MessageTextIsEmpty (callback)" % chat_id)
+        # logger.warning("User: %d regions-->MessageTextIsEmpty (callback)" % chat_id)
         pass
     except InvalidQueryID:
-        # logging.log(logging.WARNING, "User: %d regions-->Invalid Query ID (callback)" % chat_id)
+        # logger.warning("User: %d regions-->Invalid Query ID (callback)" % chat_id)
         pass
 
 
@@ -378,14 +389,14 @@ async def echo(message: types.Message):
         await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
-        logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
+        logger.info("User: %d unknown command: %s" % (chat_id, text))
         if not relax:
             notify_status = await utils.user_get_notify_status(message.chat.id)
             await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged(notify_status))
 
     else:
         if not relax:
-            logging.log(logging.INFO, "User: %d unknown command: %s" % (chat_id, text))
+            logger.info("User: %d unknown command: %s" % (chat_id, text))
             await message.answer(strings.login_unauthorized)
 
 

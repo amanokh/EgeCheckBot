@@ -17,6 +17,17 @@ from pypika import Column
 from json.decoder import JSONDecodeError
 from aiogram import types, exceptions
 
+logger = logging.getLogger("ege-check-bot.utils")
+logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler('utils.log')
+
+c_handler.setFormatter(logging.Formatter('%(name)s:%(levelname)s:%(message)s'))
+f_handler.setFormatter(logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s'))
+
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
 db_conn = DbConnection().conn
 
 users_table = DbTable(db_conn, db_table_users,
@@ -293,17 +304,17 @@ async def handle_get_results_json(chat_id, attempts=5):
             async with aiohttp.ClientSession() as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
                 json = await response.json()
-            logging.log(logging.INFO, "User: %d results got" % chat_id)
+            logger.info("User: %d results got" % chat_id)
 
             return "", json["Result"]["Exams"]
         else:
-            logging.log(logging.WARNING, "User: %d results UNSUCCESSFUL: unlogged" % chat_id)
+            logger.warning("User: %d results UNSUCCESSFUL: unlogged" % chat_id)
             return "Возникла ошибка при авторизации. Пожалуйста, попробуйте войти заново с помощью /logout.", None
     except aiohttp.ClientConnectionError:
-        logging.log(logging.WARNING, str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
+        logger.warning(str(chat_id) + " REQUESTS.PY Exc, attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1)
     except (KeyError, JSONDecodeError):
-        logging.log(logging.WARNING, str(chat_id) + str(response.content) + " attempt: %d" % attempts)
+        logger.warning(str(chat_id) + str(response.content) + " attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1)
 
 
@@ -371,7 +382,7 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
 
 
     else:  # user logged out
-        logging.log(logging.WARNING, "User: %d results after log out" % chat_id)
+        logger.warning("User: %d results after log out" % chat_id)
 
 
 async def on_results_updated(response, region, except_from_id=1, callback_bot=None):
@@ -395,12 +406,12 @@ async def on_results_updated(response, region, except_from_id=1, callback_bot=No
                         region_exams.add(exam_id)
                         await regions_table.update(region, {"notified_exams": str(region_exams)})
 
-                        logging.log(logging.WARNING, "MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
+                        logger.warning("MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
                         asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
 
 
 async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
-    logging.log(logging.WARNING, "MAILER STARTED %d %s" % (region, title))
+    logger.warning("MAILER STARTED %d %s" % (region, title))
     time = datetime.now().timestamp()
     users_count = 0
 
@@ -429,17 +440,16 @@ async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
                         await asyncio.sleep(10)
                         await bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
                     except exceptions.BotBlocked:
-                        logging.log(logging.WARNING, "User: %d blocked a bot while notifying" % chat_id)
+                        logger.warning("User: %d blocked a bot while notifying" % chat_id)
                     except:
-                        logging.log(logging.WARNING, "User: %d unexpected error while notifying" % chat_id)
+                        logger.warning("User: %d unexpected error while notifying" % chat_id)
             except:
-                logging.log(logging.WARNING,
-                            "User: %d may have been deleted %s" % (chat_id, sys.exc_info()[1]))
+                logger.warning("User: %d may have been deleted %s" % (chat_id, sys.exc_info()[1]))
         else:
-            logging.log(logging.WARNING, "CALLBACK BOT is unspecified")
+            logger.warning("CALLBACK BOT is unspecified")
 
     time_stop = datetime.now().timestamp()
-    logging.log(logging.WARNING, "MAILER FINISHED %d %s in %f secs" % (region, title, time_stop - time))
+    logger.warning("MAILER FINISHED %d %s in %f secs" % (region, title, time_stop - time))
     with open('log_notify.txt', 'a') as logfile:
         logfile.write(
             "%s MAILER FINISHED %d %s %d users, in %f secs\n" % (datetime.now().strftime("%D %H:%M:%S"), region,
