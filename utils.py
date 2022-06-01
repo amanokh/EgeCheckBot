@@ -3,7 +3,6 @@ import os
 import logging
 import base64
 import pytz
-import sys
 import asyncio
 import shelve
 
@@ -15,7 +14,8 @@ from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOK
 from db_worker import DbConnection, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
-from aiogram import types, exceptions
+
+from mailer import Mailer
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -448,56 +448,16 @@ async def on_results_updated(response, region, except_from_id=1, callback_bot=No
             if exam_id not in ignored_exams and not is_composition:  # проверка на thrown/composition
                 region_info = await regions_table.get(region)
                 if region_info:
-                    region_exams = set(region_info["notified_exams"])
-                    if exam_id not in region_exams:  # проверка на существующее оповещение
-                        region_exams.add(exam_id)
-                        await regions_table.update(region, {"notified_exams": str(region_exams)})
+                    region_notified_exams = set(region_info["notified_exams"])
+                    if exam_id not in region_notified_exams:  # проверка на существующее оповещение
+                        region_notified_exams.add(exam_id)
+                        await regions_table.update(region, {"notified_exams": region_notified_exams})
 
                         logger.warning("MAIL REGION: %d EXAM: %d %s %s" % (region, exam_id, title, date))
-                        asyncio.create_task(run_mailer(region, title, exam_id, except_from_id, bot=callback_bot))
 
-
-async def run_mailer(region, title, exam_id, except_from_id=1, bot=None):
-    logger.warning("MAILER STARTED %d %s" % (region, title))
-    time = datetime.now().timestamp()
-    users_count = 0
-
-    with open('log_notify.txt', 'a') as logfile:
-        logfile.write("%s MAILER STARTED %d %s\n" % (datetime.now().strftime("%D %H:%M:%S"), region, title))
-
-    markup_button1 = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
-    markup = types.InlineKeyboardMarkup().add(markup_button1)
-    message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % title.upper()
-
-    for user in await users_table.rows_where("region = $1 AND notify = 1", region):
-        chat_id = user["chat_id"]
-        if bot:
-            try:
-                user_exams_string = user["exams"]
-                if user_exams_string:
-                    user_exams = set(user_exams_string)
-                else:
-                    user_exams = set()
-                if chat_id != except_from_id and exam_id in user_exams:
-                    try:
-                        users_count += 1
-                        await bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
-                        await asyncio.sleep(0.2)
-                    except exceptions.RetryAfter:
-                        await asyncio.sleep(10)
-                        await bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
-                    except exceptions.BotBlocked:
-                        logger.warning("User: %d blocked a bot while notifying" % chat_id)
-                    except:
-                        logger.warning("User: %d unexpected error while notifying" % chat_id)
-            except:
-                logger.warning("User: %d may have been deleted %s" % (chat_id, sys.exc_info()[1]))
-        else:
-            logger.warning("CALLBACK BOT is unspecified")
-
-    time_stop = datetime.now().timestamp()
-    logger.warning("MAILER FINISHED %d %s in %f secs" % (region, title, time_stop - time))
-    with open('log_notify.txt', 'a') as logfile:
-        logfile.write(
-            "%s MAILER FINISHED %d %s %d users, in %f secs\n" % (datetime.now().strftime("%D %H:%M:%S"), region,
-                                                                 title, users_count, time_stop - time))
+                        mailer = Mailer(region=region,
+                                        title=title,
+                                        exam_id=exam_id,
+                                        bot=callback_bot,
+                                        except_from_id=except_from_id)
+                        mailer.run()

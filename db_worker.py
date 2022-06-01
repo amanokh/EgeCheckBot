@@ -76,11 +76,8 @@ class DbTable:
         res = await self._conn.fetchrow("SELECT COUNT(*) FROM {}".format(self._table))
         return res["count"]
 
-    async def rows_where(self, condition, values):
-        query = Query.from_(self._table) \
-            .select("*") \
-            .where(condition)
-        return await self._conn.fetch(query.get_sql(), values)
+    async def custom_fetch(self, query, *values):
+        return await self._conn.fetch(query, *values)
 
 
 def jsonify_if_needed(value):

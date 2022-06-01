@@ -5,6 +5,8 @@ NOTIFY_TIME = 0
 VERSION_BUILD = "2.0.0_25052022_2322"
 
 relax_timer = 5
+relax_mailer = 0.2
+relax_retry_error = 0.2
 
 db_url = os.environ.get("DATABASE_URL")
 
