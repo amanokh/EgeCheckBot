@@ -153,7 +153,7 @@ async def user_login_setRegion(chat_id, region):
 
 
 async def user_login_setPassport(chat_id, passport):
-    if 5 <= len(passport) <= 12:
+    if 5 <= len(passport) <= 12 and " " not in passport:
         await login_table.update(chat_id, {
             "status": "captcha",
             "passport": passport
