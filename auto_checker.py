@@ -69,7 +69,7 @@ async def select_near_exams(conn):
 
     logger.info("Will check %d exams:", len(exams))
     for exam in exams_rows:
-        logger.info(exam["title"])
+        logger.info("%d %s", exam["exam_id"], exam["title"])
 
     return exams
 
