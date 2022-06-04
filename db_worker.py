@@ -1,10 +1,6 @@
 import asyncio
 import asyncpg
 import config
-import datetime
-import decimal
-import json
-import uuid
 
 from pypika import Table, Query, Parameter, Field
 from typing import Dict, Any
@@ -50,9 +46,8 @@ class DbTable:
         query = Query.into(self._table) \
             .columns(*updates.keys()) \
             .insert(*(Parameter("${:d}".format(i + 1)) for i in range(len(updates))))
-        values = map(jsonify_if_needed, updates.values())
 
-        await self._conn.execute(query.get_sql(), *values)
+        await self._conn.execute(query.get_sql(), *updates.values())
 
     async def update(self, key, updates: Dict[str, Any]):
         param_count = 0
@@ -62,9 +57,7 @@ class DbTable:
             query = query.set(update, Parameter("${:d}".format(param_count)))
         query = query.where(self._pk_id == key)
 
-        values = map(jsonify_if_needed, updates.values())
-
-        await self._conn.execute(query.get_sql(), *values)
+        await self._conn.execute(query.get_sql(), *updates.values())
 
     async def delete(self, key):
         query = Query.from_(self._table) \
@@ -79,15 +72,3 @@ class DbTable:
     async def custom_fetch(self, query, *values):
         return await self._conn.fetch(query, *values)
 
-
-def jsonify_if_needed(value):
-    if isinstance(value, decimal.Decimal):
-        return float(value)
-    if isinstance(value, (dict, list, tuple)):
-        return json.dumps(value, default=repr, ensure_ascii=False)
-    elif isinstance(value, (datetime.time, datetime.date, datetime.datetime)):
-        return value.isoformat()
-    elif isinstance(value, uuid.UUID):
-        return str(value)
-    else:
-        return value

@@ -51,9 +51,9 @@ regions_table = DbTable(db_conn, db_table_regions,
 examsinfo_table = DbTable(db_conn, db_table_examsinfo,
                           (Column("exam_id", "int", nullable=False),
                            Column("title", "text", nullable=False),
-                           Column("exam_date", "text"),
-                           Column("res_date_official", "text"),
-                           Column("res_date_predicted", "text")),
+                           Column("exam_date", "date"),
+                           Column("res_date_official", "date"),
+                           Column("res_date_predicted", "date")),
                           pk_id="exam_id")
 
 stats_table = DbTable(db_conn, db_table_stats,
@@ -206,7 +206,7 @@ async def examsinfo_update(response):
             await examsinfo_table.insert({
                 "exam_id": exam_id,
                 "title": title,
-                "exam_date": exam_date
+                "exam_date": datetime.strptime(exam_date, "%Y-%m-%d")
             })
 
 
