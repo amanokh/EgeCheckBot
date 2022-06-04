@@ -11,7 +11,7 @@ from datetime import datetime
 from hashlib import md5
 from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
     EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, db_table_stats, proxy_url, relax_timer
-from db_worker import DbConnection, DbTable
+from db_worker import DbConnectionPool, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
 
@@ -21,7 +21,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
 
-db_conn = DbConnection().conn
+db_conn = DbConnectionPool().conn
 
 users_table = DbTable(db_conn, db_table_users,
                       (Column("chat_id", "bigint", nullable=False),
@@ -295,7 +295,7 @@ async def pass_stats_exams_by_user_hash(user_hash, response):
     await stats_table.update(user_hash, {"exams": exams})
 
 
-async def handle_get_results_json(chat_id, attempts=5):
+async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
     if attempts == 0:
         return "Сервер ЕГЭ не ответил на запрос. Попробуйте получить результаты ещё раз.", None
     try:
@@ -308,7 +308,8 @@ async def handle_get_results_json(chat_id, attempts=5):
             async with aiohttp.ClientSession() as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
                 json = await response.json()
-            logger.info("User: %d results got" % chat_id)
+            if not from_auto_checker:
+                logger.info("User: %d results got" % chat_id)
 
             return "", json["Result"]["Exams"]
         else:

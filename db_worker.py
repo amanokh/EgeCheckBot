@@ -6,11 +6,22 @@ from pypika import Table, Query, Parameter, Field
 from typing import Dict, Any
 
 
-class DbConnection:
+class DbConnectionPool:
     conn = None
 
     async def connect_db(self):
         self.conn = await asyncpg.create_pool(dsn=config.db_url)
+
+    def __init__(self):
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.connect_db())
+
+
+class DbConnection:
+    conn = None
+
+    async def connect_db(self):
+        self.conn = await asyncpg.connect(dsn=config.db_url)
 
     def __init__(self):
         loop = asyncio.get_event_loop()

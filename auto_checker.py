@@ -1,85 +1,113 @@
 import ast
 import asyncio
 import logging
+import os
+
+import asyncpg
+
+import config
 import utils
 from datetime import datetime
 
+from db_worker import DbConnection
 
-async def users_sampleSelections_generator(exams, num_of_users=2):
-    samples_list = []
-    logging.log(logging.WARNING, "Checker Regeneration: exams list: %s" % str(exams))
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
+
+
+async def select_random_users_by_region_and_exam(conn, region, exam_id, num_of_users=2):
+    user_ids = set()
+    users_fetched = await conn.fetch(
+        "select * from %s where $1 = any(exams) and region = $2 order by random()" % config.db_table_users,
+        exam_id,
+        region)
+
+    amount_of_users = 0
+    for user in users_fetched:
+        if amount_of_users < num_of_users:
+            user_ids.add(user["chat_id"])
+            amount_of_users += 1
+        else:
+            break
+
+    return user_ids
+
+
+async def select_random_users_by_exams(conn, exams):
+    user_ids = set()
+    region_rows = await conn.fetch("select * from %s" % config.db_table_regions)
 
     for exam_id in exams:
-        exam_sampleSelection = {}
+        fetched_regions_count = 0
+        notified_regions_count = 0
 
-        for region in utils.regions_table.rows:
-            users_ids = []
-            region_id = region["region"]
-            region_notified_exams = set(ast.literal_eval(region["notified_exams"]))
-            if exam_id not in region_notified_exams:
-                users_init_table = utils.db_users.execute_returning_dicts(
-                    f"SELECT * FROM users WHERE exams IS NOT NULL AND region={region_id} ORDER BY RANDOM()")
+        for region_row in region_rows:
+            region = region_row["region"]
+            region_exams = region_row["exams"]
+            region_notified_exams = region_row["notified_exams"]
 
-                sampled_users_counter = 0
+            if exam_id in region_exams and exam_id not in region_notified_exams:
+                users_fetched = await select_random_users_by_region_and_exam(conn, region, exam_id)
+                if users_fetched:
+                    user_ids.update(users_fetched)
+                    fetched_regions_count += 1
+            elif exam_id in region_notified_exams:
+                notified_regions_count += 1
 
-                for user in users_init_table:
-                    user_exams = ast.literal_eval(user["exams"])
-                    if exam_id in user_exams and utils.user_check_logged(user["chat_id"]):
-                        users_ids.append(user["chat_id"])
-                        sampled_users_counter += 1
+        logger.info("Checker regeneration: exam_id: %d, fetched regions count: %d, notified regions: %d",
+                    exam_id, fetched_regions_count, notified_regions_count)
 
-                    if sampled_users_counter >= num_of_users:
-                        break
-
-                if len(users_ids):
-                    exam_sampleSelection[region_id] = users_ids
-        if len(exam_sampleSelection):
-            samples_list.append(exam_sampleSelection)
-        logging.log(logging.INFO,
-                    "Checker Regeneration: exam %d, regions count: %d" % (exam_id, len(exam_sampleSelection)))
-
-    return samples_list
+    return user_ids
 
 
-async def check_thread_runner(exams, bot):
-    logging.log(logging.INFO, "Checker: started")
+async def select_near_exams(conn):
+    exams_rows = await conn.fetch(
+        "select * from %s where exam_date > current_date - 30 and (exam_date <= current_date - 7 or res_date_official <= current_date + 7)" % config.db_table_examsinfo)
+
+    exams = [exam["exam_id"] for exam in exams_rows]
+
+    logger.info("Will check %d exams:", len(exams))
+    for exam in exams_rows:
+        logger.info(exam["title"])
+
+    return exams
+
+
+async def check_thread_runner(bot):
+    logger.info("Checker: started")
     samples_age = datetime.now().timestamp()
-    samples_need_to_regenarate = False
+    samples_need_to_regenerate = False
 
-    samples_list = await users_sampleSelections_generator(exams)
+    db_conn = await asyncpg.connect(dsn=config.db_url)
 
-    while exams:
-        time_loop = datetime.now().timestamp()
-        if len(samples_list):
+    exams = await select_near_exams(db_conn)
+    users_samples = await select_random_users_by_exams(db_conn, exams)
+
+    while True:
+        if exams:
+            time_loop = datetime.now().timestamp()
             try:
-                for sampleExamsSelection in samples_list:
-                    for region in sampleExamsSelection:
-                        for user_id in sampleExamsSelection[region]:
-                            if utils.user_check_logged(user_id):
-                                response = await utils.handle_get_results_json(user_id, logs=False,
-                                                                               is_user_request=False)
-                                await asyncio.sleep(0.5)
+                for user_id in users_samples:
+                    if await utils.user_check_logged(user_id):
+                        e, response = await utils.handle_get_results_json(user_id, from_auto_checker=True)
+                        await asyncio.sleep(config.relax_checker)
 
-                                if not response[0] and len(response[1]):
-                                    utils.check_results_updates(user_id, response[1], callback_bot=bot,
-                                                                is_user_request=False)
-                            else:
-                                samples_need_to_regenarate = True
-
-                time_stop = datetime.now().timestamp()
-                logging.log(logging.INFO,
-                            "Checker: loop time %f secs" % (time_stop - time_loop))
-
-                if datetime.now().timestamp() - samples_age > 600 or samples_need_to_regenarate:
-                    samples_age = datetime.now().timestamp()
-                    samples_list = await users_sampleSelections_generator(exams)
+                        if response:
+                            await utils.check_results_updates(user_id, response, callback_bot=bot,
+                                                              is_user_request=False)
+                    else:
+                        samples_need_to_regenerate = True
             except:
-                logging.log(logging.WARNING, "Checker: an unexpected error happen")
+                logger.warning("Checker: an unexpected error happened")
+
+            time_stop = datetime.now().timestamp()
+            logger.info("Checker: loop time %f secs", time_stop - time_loop)
+
+            if datetime.now().timestamp() - samples_age > 600 or samples_need_to_regenerate:
+                samples_age = datetime.now().timestamp()
+                users_samples = await select_random_users_by_exams(db_conn, exams)
+
         else:
-            logging.log(logging.WARNING, "Checker: samplesList is empty, waiting for 600 secs...")
-            await asyncio.sleep(600)
-            samples_list = await users_sampleSelections_generator(exams)
-
-
-async def auto_checker(bot):
-    logging.log(logging.INFO, "Checker v2: started")
+            logger.warning("Checker: exams list is empty, waiting for 2 hours...")
+            await asyncio.sleep(60 * 60 * 2)

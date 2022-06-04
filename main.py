@@ -1,6 +1,7 @@
 import asyncio
 import logging
 # import auto_checker
+import auto_checker
 import config
 import os
 import utils
@@ -357,7 +358,7 @@ async def echo(message: types.Message):
             await utils.user_login_setRegion(chat_id, text)
             await bot.send_message(chat_id, strings.confirm_region(int(text)), parse_mode="MARKDOWN")
             await send_notify_region_site(chat_id, text)
-            await message.answer(strings.login_passport)
+            await message.answer(strings.login_passport, parse_mode="MARKDOWN")
         else:
             await message.answer(strings.login_region_incorrect, reply_markup=buttons.markup_inline_regions())
 
@@ -394,8 +395,8 @@ async def echo(message: types.Message):
 
 
 if __name__ == '__main__':
-    # loop = asyncio.get_event_loop()
-    # loop.create_task(auto_checker.check_thread_runner([22, 23, 30, 21, 335, 24], bot))
+    loop = asyncio.get_event_loop()
+    loop.create_task(auto_checker.check_thread_runner(bot))
 
     executor.start_polling(dp, skip_updates=True,
                            allowed_updates=types.AllowedUpdates.MESSAGE + types.AllowedUpdates.CALLBACK_QUERY)
