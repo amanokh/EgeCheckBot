@@ -81,7 +81,7 @@ def markup_inline_donate():
 
 def markup_inline_retry_login():
     markup_button1 = types.InlineKeyboardButton("Повторить попытку", callback_data="login_retry")
-    markup_button2 = types.InlineKeyboardButton("Изменить данные", callback_data="start_over")
+    markup_button2 = types.InlineKeyboardButton("Исправить данные", callback_data="start_over")
     markup = types.InlineKeyboardMarkup().add(markup_button1).add(markup_button2)
     return markup
 
