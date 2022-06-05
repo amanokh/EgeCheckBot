@@ -154,6 +154,7 @@ async def check_request(message: types.Message):
 async def process_callback_results_update(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
     text = ""
+    callback_text = ""
 
     try:
         if await utils.user_check_logged(chat_id):
@@ -163,10 +164,12 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
             elif response:  # else answer not null -> send response
                 updates = await utils.check_results_updates(chat_id, response, callback_bot=bot)
                 text = await utils.parse_results_message(response, updates)
+                if not updates:
+                    callback_text = "Обновлений нет"
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
-        await bot.answer_callback_query(callback_query.id)
+        await bot.answer_callback_query(callback_query.id, text=callback_text)
         await bot.edit_message_text(chat_id=callback_query.message.chat.id,
                                     message_id=callback_query.message.message_id,
                                     text=text,
