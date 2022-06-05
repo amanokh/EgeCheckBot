@@ -309,7 +309,7 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
                 json = await response.json()
             if not from_auto_checker:
-                logger.info("User: %d results got" % chat_id)
+                logger.debug("User: %d results got" % chat_id)
 
             return "", json["Result"]["Exams"]
         else:

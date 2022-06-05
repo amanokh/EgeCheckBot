@@ -72,7 +72,7 @@ async def bot_login_attempt(chat_id):
         shelve_answer, user_hash = await utils.handle_login(chat_id)
 
         if shelve_answer == 204:
-            logger.info("User: %d user authened" % chat_id)
+            logger.debug("User: %d user authened" % chat_id)
             notify_status = await utils.user_get_notify_status(chat_id)
             await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(notify_status))
             await bot_send_results(chat_id, is_first_user_hash=user_hash)
@@ -383,14 +383,14 @@ async def echo(message: types.Message):
         await bot_login_attempt(chat_id)
 
     elif status == "logged":  # incorrect command
-        logger.info("User: %d unknown command: %s" % (chat_id, text))
+        logger.debug("User: %d unknown command: %s" % (chat_id, text))
         if not relax:
             notify_status = await utils.user_get_notify_status(message.chat.id)
             await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged(notify_status))
 
     else:
         if not relax:
-            logger.info("User: %d unknown command: %s" % (chat_id, text))
+            logger.debug("User: %d unknown command: %s" % (chat_id, text))
             await message.answer(strings.login_unauthorized)
 
 
