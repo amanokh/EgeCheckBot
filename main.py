@@ -117,7 +117,7 @@ async def send_notify_region_site(chat_id, region):
 # Commands handlers:
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    logger.info(message.chat.id)
+    logger.debug(message.chat.id)
     shelve_result = await utils.user_check_logged(int(message.chat.id))
     if not relax:
         if shelve_result:
