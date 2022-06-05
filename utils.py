@@ -21,6 +21,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
 
+cached_exam_results_dates = {}
+
 db_conn = DbConnectionPool().conn
 
 users_table = DbTable(db_conn, db_table_users,
@@ -386,6 +388,16 @@ async def check_results_updates(chat_id, response, callback_bot=None, is_user_re
         logger.warning("User: %d results after log out" % chat_id)
 
 
+async def get_exam_result_date(exam_id):
+    if exam_id in cached_exam_results_dates:
+        return cached_exam_results_dates[exam_id]
+    else:
+        exam = await examsinfo_table.get(exam_id)
+        if exam:
+            cached_exam_results_dates[exam_id] = exam["res_date_official"]
+            return exam["res_date_official"]
+
+
 async def parse_results_message(response, updates, is_first=False):
     time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
 
@@ -422,7 +434,9 @@ async def parse_results_message(response, updates, is_first=False):
                                                                                title) + "* _(результат скрыт)_"
             show_sum = False
         else:
-            mark_string = "_нет результата_"
+            result_date = await get_exam_result_date(exam["ExamId"])
+            mark_string = "_ожидаются до %s_" % datetime.strftime(result_date, "%d.%m") if result_date \
+                else "_нет результата_"
             show_sum = False
 
         message += title + " — " + mark_string + "\n"
