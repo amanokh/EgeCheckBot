@@ -3,7 +3,6 @@ import os
 import logging
 import base64
 import pytz
-import asyncio
 import shelve
 
 from asyncpg.exceptions import UniqueViolationError
@@ -14,6 +13,7 @@ from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOK
 from db_worker import DbConnectionPool, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
+from common.strings import months
 
 from mailer import Mailer
 
@@ -393,14 +393,13 @@ async def get_exam_result_date(exam_id):
         return cached_exam_results_dates[exam_id]
     else:
         exam = await examsinfo_table.get(exam_id)
-        if exam:
-            cached_exam_results_dates[exam_id] = exam["res_date_official"]
-            return exam["res_date_official"]
+        if exam and exam["res_date_official"]:
+            date = exam["res_date_official"]
+            cached_exam_results_dates[exam_id] = "%d %s" % (date.day, months[date.month])
+            return cached_exam_results_dates[exam_id]
 
 
 async def parse_results_message(response, updates, is_first=False):
-    time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
-
     mark_sum = 0
     show_sum = True
 
@@ -408,11 +407,11 @@ async def parse_results_message(response, updates, is_first=False):
     message = ""
 
     if is_first:
-        message += "*Текущие результаты:* (на %s МСК)\n\n" % time
+        message += "*Текущие результаты:* \n\n"
     elif updates:
-        message += "*⚡️Есть обновления⚡️\n*(на %s МСК)\n\n" % time
+        message += "*⚡️Есть обновления⚡️\n\n"
     else:
-        message += "*Текущие результаты:*\nОбновлений нет (на %s МСК)\n\n" % time
+        message += "*Текущие результаты:* обновлений нет \n\n"
 
     for exam in response:
         title = exam["Subject"]
@@ -435,8 +434,7 @@ async def parse_results_message(response, updates, is_first=False):
             show_sum = False
         else:
             result_date = await get_exam_result_date(exam["ExamId"])
-            mark_string = "_ожидаются до %s_" % datetime.strftime(result_date, "%d.%m") if result_date \
-                else "_нет результата_"
+            mark_string = "_ожидаются до %s_" % result_date if result_date else "_нет результата_"
             show_sum = False
 
         message += title + " — " + mark_string + "\n"
