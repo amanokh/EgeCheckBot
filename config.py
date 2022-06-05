@@ -9,6 +9,8 @@ relax_mailer = 0.2
 relax_retry_error = 10
 relax_checker = 0.2
 
+admin_id = os.environ.get("ADMIN_CHAT_ID")
+
 db_url = os.environ.get("DATABASE_URL")
 
 db_table_users = "users"

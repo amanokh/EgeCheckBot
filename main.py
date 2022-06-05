@@ -141,12 +141,14 @@ async def check_request(message: types.Message):
 
 @dp.message_handler(commands=['version'])
 async def check_request(message: types.Message):
-    await message.answer(config.VERSION_BUILD)
+    if str(message.chat.id) == config.admin_id:
+        await message.answer(config.VERSION_BUILD)
 
 
 @dp.message_handler(commands=['stats'])
 async def check_request(message: types.Message):
-    await message.answer(await utils.table_count())
+    if str(message.chat.id) == config.admin_id:
+        await message.answer(await utils.table_count())
 
 
 # Button callbacks:
