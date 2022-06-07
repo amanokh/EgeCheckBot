@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import utils
 
 from datetime import datetime
@@ -9,17 +10,9 @@ from config import relax_mailer, relax_retry_error
 
 class Mailer:
     def __init__(self, region, title, exam_id, bot, except_from_id=1):
+        logging.basicConfig()
         self.logger = logging.getLogger("mailer_{}_{}".format(region, exam_id))
-        self.logger.setLevel(logging.DEBUG)
-
-        c_handler = logging.StreamHandler()
-        f_handler = logging.FileHandler("mailer_{}_{}.log".format(region, exam_id))
-
-        c_handler.setFormatter(logging.Formatter('%(name)s:%(message)s'))
-        f_handler.setFormatter(logging.Formatter('%(asctime)s:%(name)s:%(message)s'))
-
-        self.logger.addHandler(c_handler)
-        self.logger.addHandler(f_handler)
+        self.logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
 
         self.region = region
         self.title = title
@@ -45,8 +38,8 @@ class Mailer:
                 await self._send_message(chat_id, attempts-1)
         except exceptions.BotBlocked:
             self.logger.warning("User: %d blocked a bot while notifying" % chat_id)
-        except:
-            self.logger.warning("User: %d unexpected error while notifying" % chat_id)
+        except Exception as e:
+            self.logger.warning("User: %d unexpected error while notifying: %s", chat_id, e)
 
     async def _mailer(self):
         self.logger.warning("MAILER STARTED %d %s" % (self.region, self.title))
