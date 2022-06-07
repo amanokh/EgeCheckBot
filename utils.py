@@ -409,7 +409,7 @@ async def parse_results_message(response, updates, is_first=False):
     if is_first:
         message += "*Текущие результаты:* \n\n"
     elif updates:
-        message += "*⚡️Есть обновления⚡️\n\n"
+        message += "*⚡️Есть обновления⚡️*\n\n"
     else:
         message += "*Текущие результаты:* обновлений нет \n\n"
 

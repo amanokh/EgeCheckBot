@@ -31,12 +31,22 @@ class Mailer:
         loop = asyncio.get_event_loop()
         loop.create_task(self._mailer())
 
-    async def _send_message(self, chat_id):
+    async def _send_message(self, chat_id, attempts=5):
         markup_button = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
         markup = types.InlineKeyboardMarkup().add(markup_button)
         message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % self.title.upper()
 
-        await self.bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
+        try:
+            await self.bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
+        except exceptions.RetryAfter:
+            self.logger.warning("User: %d RetryAfter error, waiting..." % chat_id)
+            await asyncio.sleep(relax_retry_error)
+            if attempts > 0:
+                await self._send_message(chat_id, attempts-1)
+        except exceptions.BotBlocked:
+            self.logger.warning("User: %d blocked a bot while notifying" % chat_id)
+        except:
+            self.logger.warning("User: %d unexpected error while notifying" % chat_id)
 
     async def _mailer(self):
         self.logger.warning("MAILER STARTED %d %s" % (self.region, self.title))
@@ -50,17 +60,9 @@ class Mailer:
 
         for user in users_fetched:
             chat_id = user["chat_id"]
-            try:
-                users_count += 1
-                await self._send_message(chat_id)
-                await asyncio.sleep(relax_mailer)
-            except exceptions.RetryAfter:
-                await asyncio.sleep(relax_retry_error)
-                await self._send_message(chat_id)
-            except exceptions.BotBlocked:
-                self.logger.warning("User: %d blocked a bot while notifying" % chat_id)
-            except:
-                self.logger.warning("User: %d unexpected error while notifying" % chat_id)
+            users_count += 1
+            await self._send_message(chat_id)
+            await asyncio.sleep(relax_mailer)
 
         total_time = datetime.now().timestamp() - time_start
         self.logger.warning("MAILER FINISHED %d %s %d users, in %f secs\n",
