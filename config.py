@@ -2,7 +2,7 @@ import os
 
 API_TOKEN = os.environ.get("TG_API_TOKEN")
 NOTIFY_TIME = 0
-VERSION_BUILD = "3.0.0_04062022_2326"
+VERSION_BUILD = "3.1.0_04062022_2326"
 
 relax_timer = 5
 relax_mailer = 0.2
