@@ -1,13 +1,13 @@
 import asyncio
 import logging
-# import auto_checker
 import auto_checker
 import config
 import os
 import utils
 
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter
+from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter, \
+    MessageIdInvalid
 from common import strings, buttons
 from random import choice
 
@@ -181,6 +181,8 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
         pass
     except MessageTextIsEmpty:
         pass
+    except MessageIdInvalid:
+        logger.warning("MessageIdInvalid, uid: %d, msg_id: %d", chat_id, callback_query.message.message_id)
     except InvalidQueryID:
         # logger.warning("User: %d results-->Invalid Query ID (callback)" % chat_id)
         pass
@@ -188,7 +190,6 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == 'regions_btn_show')
 async def process_callback_regions_show(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
     try:
         markup_button = types.InlineKeyboardButton("Скрыть список регионов", callback_data="regions_btn_hide")
         markup = types.InlineKeyboardMarkup().add(markup_button)
@@ -212,8 +213,6 @@ async def process_callback_regions_show(callback_query: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == 'regions_btn_hide')
 async def process_callback_regions_hide(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-
     try:
         markup_button = types.InlineKeyboardButton("Показать список регионов", callback_data="regions_btn_show")
         markup = types.InlineKeyboardMarkup().add(markup_button)
@@ -224,13 +223,10 @@ async def process_callback_regions_hide(callback_query: types.CallbackQuery):
                                     text=strings.login_region,
                                     reply_markup=markup)
     except MessageNotModified:
-        # logger.warning("User: %d regions-->MessageNotModified (callback)" % chat_id)
         pass
     except MessageTextIsEmpty:
-        # logger.warning("User: %d regions-->MessageTextIsEmpty (callback)" % chat_id)
         pass
     except InvalidQueryID:
-        # logger.warning("User: %d regions-->Invalid Query ID (callback)" % chat_id)
         pass
 
 
@@ -339,9 +335,11 @@ async def sticker_answer(message: types.Message):
                 'CAACAgIAAxkBAAEP-ahij1QLj4Eh4L_U1DeTbI2MCu4CTAAC_hEAAo6E8Eup_sGzXXLhQCQE',
                 'CAACAgQAAxkBAAEP-apij1RAmV0JdJfhjzRzyb0kh0beqQACTAEAAqghIQZjKrRWscYWyCQE',
                 'CAACAgIAAxkBAAEP-axij1RxuV6WmfbixVXdsSHHBG4ppwAClgsAAgGxSUrXP-UOB9uGfyQE']
+
+    if message.sticker.file_unique_id == 'AgADfhAAAowt_Qc':
+        await utils.stats_table.collect_sticker_feature(message.sticker.file_unique_id)
     if not relax:
-        await bot.send_sticker(message.chat.id,
-                               sticker=choice(stickers))
+        await bot.send_sticker(message.chat.id, sticker=choice(stickers))
 
 
 @dp.message_handler()

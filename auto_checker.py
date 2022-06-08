@@ -1,4 +1,3 @@
-import ast
 import asyncio
 import logging
 import os
@@ -8,8 +7,6 @@ import asyncpg
 import config
 import utils
 from datetime import datetime
-
-from db_worker import DbConnection
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

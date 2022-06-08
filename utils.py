@@ -2,15 +2,14 @@ import aiohttp
 import os
 import logging
 import base64
-import pytz
 import shelve
 
 from asyncpg.exceptions import UniqueViolationError
 from datetime import datetime
 from hashlib import md5
 from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
-    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, db_table_stats, proxy_url, relax_timer
-from db_worker import DbConnectionPool, DbTable
+    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, db_table_stats, proxy_url
+from common.db_worker import DbConnectionPool, DbTable
 from pypika import Column
 from json.decoder import JSONDecodeError
 from common.strings import months
