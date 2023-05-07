@@ -1,0 +1,44 @@
+services:
+  db:
+    logging:
+      options:
+        max-size: 10mb
+    image: "postgres"
+    container_name: "postgres-db"
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - 127.0.0.1:${DB_PORT}:5432
+    expose:
+      - 5432
+  bot:
+    logging:
+      options:
+        max-size: 10mb
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    environment:
+      - TG_API_TOKEN=${TG_API_TOKEN}
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@${DB_ADDR}:5432/${DB_NAME}
+      - ADMIN_CHAT_IDS=${ADMIN_CHAT_IDS}
+      - ENVIRONMENT_UID=${ENVIRONMENT_UID}
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db:${DB_ADDR}
+
+volumes:
+  db_data:

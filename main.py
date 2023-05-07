@@ -141,13 +141,13 @@ async def check_request(message: types.Message):
 
 @dp.message_handler(commands=['version'])
 async def check_request(message: types.Message):
-    if str(message.chat.id) == config.admin_id:
+    if str(message.chat.id) in config.admin_ids:
         await message.answer(config.VERSION_BUILD)
 
 
 @dp.message_handler(commands=['stats'])
 async def check_request(message: types.Message):
-    if str(message.chat.id) == config.admin_id:
+    if str(message.chat.id) in config.admin_ids:
         await message.answer(await utils.table_count())
 
 

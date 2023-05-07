@@ -1,5 +1,5 @@
-aiogram~=2.20
+aiogram~=2.25.1
 pytz~=2022.1
 requests-async
-asyncpg~=0.25.0
+asyncpg~=0.27.0
 PyPika~=0.48.9
