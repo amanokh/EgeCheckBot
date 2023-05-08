@@ -5,6 +5,7 @@ import base64
 import shelve
 
 from asyncpg.exceptions import UniqueViolationError
+from asyncio import TimeoutError as ATimeoutError
 from datetime import datetime
 from hashlib import md5
 from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
@@ -304,7 +305,7 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
         if user:
             token = user["token"]
             headers = EGE_HEADERS.copy()
-            headers["Cookie"] = "Participant=" + token
+            headers["Cookie"] += "Participant=" + token
 
             async with aiohttp.ClientSession() as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
@@ -321,6 +322,9 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
         return await handle_get_results_json(chat_id, attempts - 1)
     except (KeyError, JSONDecodeError):
         logger.warning(str(chat_id) + str(response.content) + " attempt: %d" % attempts)
+        return await handle_get_results_json(chat_id, attempts - 1)
+    except ATimeoutError as e:
+        logger.warning(e)
         return await handle_get_results_json(chat_id, attempts - 1)
 
 
@@ -341,7 +345,9 @@ async def handle_get_results_json_token(token, attempts=5):
 
 
 # преобразование падежа слова "балл"
-def count_case(mark):
+def count_case(mark, title=""):
+    if "Математика базовая" in title:
+        return ""
     if mark % 10 == 1:
         return " балл"
     elif 1 < mark % 10 < 5:
@@ -424,10 +430,10 @@ async def parse_results_message(response, updates, is_first=False):
             if is_composition:
                 mark_string = "*Зачёт* ✅" if mark == 1 else "*Незачёт* ❗️"
             else:
-                mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark, mark_threshold, title) + "*"
+                mark_string = "*" + str(mark) + count_case(mark, title) + check_threshold(mark, mark_threshold, title) + "*"
                 mark_sum += int(mark)
         elif int(mark):
-            mark_string = "*" + str(mark) + count_case(mark) + check_threshold(mark,
+            mark_string = "*" + str(mark) + count_case(mark, title) + check_threshold(mark,
                                                                                mark_threshold,
                                                                                title) + "* _(результат скрыт)_"
             show_sum = False
@@ -456,7 +462,7 @@ async def on_results_updated(response, region, except_from_id=1, callback_bot=No
 
         ignored_exams = set()
 
-        if (has_result and not is_hidden) or int(mark):  # есть ли результат
+        if int(mark):  # есть ли результат
             if exam_id not in ignored_exams and not is_composition:  # проверка на thrown/composition
                 region_info = await regions_table.get(region)
                 if region_info:

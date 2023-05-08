@@ -1,6 +1,4 @@
 import asyncio
-import logging
-
 import asyncpg
 import base64
 import config

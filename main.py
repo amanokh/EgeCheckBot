@@ -7,7 +7,7 @@ import utils
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter, \
-    MessageIdInvalid
+    MessageIdInvalid, MessageToEditNotFound
 from common import strings, buttons
 from random import choice
 
@@ -171,18 +171,25 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
-        await bot.answer_callback_query(callback_query.id, text=callback_text)
         await bot.edit_message_text(chat_id=callback_query.message.chat.id,
                                     message_id=callback_query.message.message_id,
                                     text=text,
                                     parse_mode="MARKDOWN",
                                     reply_markup=buttons.markup_inline_results())
+        await bot.answer_callback_query(callback_query.id, text=callback_text)
+
     except MessageNotModified:
-        pass
+        await bot.answer_callback_query(callback_query.id, text=callback_text)
     except MessageTextIsEmpty:
         pass
     except MessageIdInvalid:
         logger.warning("MessageIdInvalid, uid: %d, msg_id: %d", chat_id, callback_query.message.message_id)
+        await bot_send_results(chat_id)
+        logger.warning("Sent as alternative, uid: %d, msg_id: %d", chat_id, callback_query.message.message_id)
+    except MessageToEditNotFound:
+        logger.warning("MessageToEditNotFound, uid: %d, msg_id: %d", chat_id, callback_query.message.message_id)
+        await bot_send_results(chat_id)
+        logger.warning("Sent as alternative, uid: %d, msg_id: %d", chat_id, callback_query.message.message_id)
     except InvalidQueryID:
         # logger.warning("User: %d results-->Invalid Query ID (callback)" % chat_id)
         pass

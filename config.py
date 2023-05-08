@@ -2,7 +2,7 @@ import os
 
 API_TOKEN = os.environ.get("TG_API_TOKEN")
 NOTIFY_TIME = 0
-VERSION_BUILD = "3.1.0_04062022_2326"
+VERSION_BUILD = "3.1.1_08052023"
 
 relax_timer = 5
 relax_mailer = 0.2
@@ -22,7 +22,7 @@ EGE_URL = "https://checkege.rustest.ru/api/exam"
 EGE_TOKEN_URL = "https://checkege.rustest.ru/api/captcha"
 EGE_LOGIN_URL = "https://checkege.rustest.ru/api/participant/login"
 
-EGE_HEADERS = {"Cookie":'', "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36"}
+EGE_HEADERS = {"Cookie":'tmr_reqNum=248; tmr_lvid=00001; tmr_lvidTS=00001; tmr_detect=0%7C1655284518772; __ddgid_=00001; __ddgmark_=00001; __ddg5_=00001; __ddg2_=ubSPVCvkoIylTT3c; __ddg3=00001; __ddg1_=00001;', "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36"}
 
 proxy_url = os.environ.get("PROXY_URL")
 environment_id = os.environ.get("ENVIRONMENT_UID")
