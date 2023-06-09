@@ -22,7 +22,19 @@ EGE_URL = "https://checkege.rustest.ru/api/exam"
 EGE_TOKEN_URL = "https://checkege.rustest.ru/api/captcha"
 EGE_LOGIN_URL = "https://checkege.rustest.ru/api/participant/login"
 
-EGE_HEADERS = {"Cookie":'tmr_reqNum=248; tmr_lvid=00001; tmr_lvidTS=00001; tmr_detect=0%7C1655284518772; __ddgid_=00001; __ddgmark_=00001; __ddg5_=00001; __ddg2_=ubSPVCvkoIylTT3c; __ddg3=00001; __ddg1_=00001;', "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36"}
+EGE_HEADERS = {
+    'Accept': '*/*',
+    'Accept-Language': 'ru,ru-RU;q=0.9,en;q=0.8,sr;q=0.7',
+    'Connection': 'keep-alive',
+    'Cookie': '',
+    'DNT': '1',
+    'Referer': 'https://checkege.rustest.ru/exams',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5 Build/OPM1.171019.026; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 YaBrowser/22.8.0.223 (lite) Mobile Safari/537.36',
+    'X-Requested-With': 'XMLHttpRequest'
+}
 
 proxy_url = os.environ.get("PROXY_URL")
 environment_id = os.environ.get("ENVIRONMENT_UID")

@@ -221,7 +221,7 @@ def handle_captchaDelete(chat_id):
 
 async def handle_captchaGet(chat_id):
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
             response = await session.get(EGE_TOKEN_URL, timeout=5, proxy=proxy_url)
             json = await response.json()
 
@@ -256,7 +256,7 @@ async def handle_login(chat_id):
                 "Captcha": user["captcha_answer"],
                 "Token": user["captcha_token"]
             }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
             response = await session.post(EGE_LOGIN_URL, data=params, timeout=10)
 
         if "Participant" in response.cookies:
@@ -307,7 +307,7 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
             headers = EGE_HEADERS.copy()
             headers["Cookie"] += "Participant=" + token
 
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
                 json = await response.json()
             if not from_auto_checker:
@@ -334,7 +334,7 @@ async def handle_get_results_json_token(token, attempts=5):
     try:
         headers = EGE_HEADERS.copy()
         headers["Cookie"] = "Participant=" + token
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
             response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
             json = await response.json()
         return [0, json["Result"]["Exams"]]
