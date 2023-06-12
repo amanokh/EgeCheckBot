@@ -51,10 +51,8 @@ def markup_inline_regions():
 
 
 def markup_inline_results():
-    markup_button1 = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
-    markup_button2 = types.InlineKeyboardButton("Подробнее на сайте", url="http://checkege.rustest.ru")
-    markup = types.InlineKeyboardMarkup().add(markup_button1).add(markup_button2)
-    return markup
+    markup_button = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
+    return types.InlineKeyboardMarkup().add(markup_button)
 
 
 def markup_inline_donate():
