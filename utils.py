@@ -309,6 +309,8 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
 
             async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
                 response = await session.get(EGE_URL, headers=headers, timeout=5, proxy=proxy_url)
+                if not response.ok:
+                    return "Сервер ЕГЭ не ответил на запрос. Пожалуйста, попробуйте повторить запрос позже.", None
                 json = await response.json()
             if not from_auto_checker:
                 logger.debug("User: %d results got" % chat_id)
