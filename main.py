@@ -73,8 +73,7 @@ async def bot_login_attempt(chat_id):
 
         if shelve_answer == 204:
             logger.debug("User: %d user authened" % chat_id)
-            notify_status = await utils.user_get_notify_status(chat_id)
-            await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged(notify_status))
+            await bot.send_message(chat_id, strings.login_authened, reply_markup=buttons.markup_logged())
             await bot_send_results(chat_id, is_first_user_hash=user_hash)
 
         elif shelve_answer == 450:
@@ -251,15 +250,6 @@ async def process_callback_login_retry(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
 
 
-@dp.callback_query_handler(lambda c: c.data == 'notify_on')
-async def process_callback_notify_on(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-    await utils.users_table.update(chat_id, {"notify": 1})
-    await bot.answer_callback_query(callback_query.id)
-    notify_status = await utils.user_get_notify_status(chat_id)
-    await bot.send_message(chat_id, strings.login_notify_on, reply_markup=buttons.markup_logged(notify_status))
-
-
 @dp.callback_query_handler(lambda c: c.data == 'start_over')
 async def process_callback_start_over(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
@@ -306,20 +296,6 @@ async def btn_logout(message: types.Message):
 @dp.message_handler(regexp='Начать заново')
 async def btn_clear(message: types.Message):
     await clear_user(message.chat.id)
-
-
-@dp.message_handler(regexp='Включить уведомления')
-async def btn_notify_on(message: types.Message):
-    if not relax:
-        await utils.users_table.update(message.chat.id, {"notify": 1})
-        await message.answer(strings.login_notify_on, reply_markup=buttons.markup_logged(1))
-
-
-@dp.message_handler(regexp='Выключить уведомления')
-async def btn_notify_off(message: types.Message):
-    if not relax:
-        await utils.users_table.update(message.chat.id, {"notify": 0})
-        await message.answer(strings.login_notify_off, reply_markup=buttons.markup_logged(0))
 
 
 @dp.message_handler(regexp='Поддержать автора')
@@ -395,8 +371,7 @@ async def echo(message: types.Message):
     elif status == "logged":  # incorrect command
         logger.debug("User: %d unknown command: %s" % (chat_id, text))
         if not relax:
-            notify_status = await utils.user_get_notify_status(message.chat.id)
-            await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged(notify_status))
+            await message.answer(strings.command_incorrect, reply_markup=buttons.markup_logged())
 
     else:
         if not relax:

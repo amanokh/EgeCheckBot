@@ -105,12 +105,6 @@ async def user_get_login_status(chat_id):
             return user["status"]
 
 
-async def user_get_notify_status(chat_id):
-    user = await users_table.get(chat_id)
-    if user:
-        return user["notify"]
-
-
 async def user_clear(chat_id):
     if await users_table.get(chat_id):
         await users_table.delete(chat_id)

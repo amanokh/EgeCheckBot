@@ -2,25 +2,16 @@ from aiogram import types
 
 
 # ReplyKeyboardMarkup mockups:
-def markup_logged(notify_status):
+def markup_logged():
     markup_btn_update = types.KeyboardButton("Получить результаты 🔄")
     markup_btn_logout = types.KeyboardButton("Выйти ❌")
     markup_btn_help = types.KeyboardButton("Помощь ℹ️")
     markup_btn_timetable = types.KeyboardButton("Даты 🗓")
     markup_btn_donate = types.KeyboardButton("Поддержать автора 💗")
-    markup_btn_notify_off = types.KeyboardButton("Выключить уведомления 🔕")
-    markup_btn_notify_on = types.KeyboardButton("Включить уведомления 🔔")
 
-    if notify_status:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(
-            markup_btn_update).add(markup_btn_help, markup_btn_timetable, markup_btn_logout) \
-            .add(markup_btn_notify_off) \
-            .add(markup_btn_donate)
-    else:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(
-            markup_btn_update).add(markup_btn_help, markup_btn_timetable, markup_btn_logout) \
-            .add(markup_btn_notify_on) \
-            .add(markup_btn_donate)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True).add(
+        markup_btn_update).add(markup_btn_help, markup_btn_timetable, markup_btn_logout).add(markup_btn_donate)
+
     return markup
 
 
@@ -63,12 +54,6 @@ def markup_inline_results():
     markup_button1 = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
     markup_button2 = types.InlineKeyboardButton("Подробнее на сайте", url="http://checkege.rustest.ru")
     markup = types.InlineKeyboardMarkup().add(markup_button1).add(markup_button2)
-    return markup
-
-
-def markup_inline_notify_on():
-    markup_button1 = types.InlineKeyboardButton("Включить уведомления", callback_data="notify_on")
-    markup = types.InlineKeyboardMarkup().add(markup_button1)
     return markup
 
 
