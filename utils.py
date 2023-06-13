@@ -236,7 +236,7 @@ async def handle_login(chat_id):
             return 204, user_stats_hash
         else:
             return 450, ""
-    except aiohttp.ClientConnectionError:
+    except (aiohttp.ClientConnectionError, ATimeoutError):
         return 452, ""
 
 
@@ -276,8 +276,7 @@ async def handle_get_results_json(chat_id, attempts=5, from_auto_checker=False):
     except (KeyError, JSONDecodeError):
         logger.warning(str(chat_id) + str(response.content) + " attempt: %d" % attempts)
         return await handle_get_results_json(chat_id, attempts - 1)
-    except ATimeoutError as e:
-        logger.warning(e)
+    except ATimeoutError:
         return await handle_get_results_json(chat_id, attempts - 1)
 
 
