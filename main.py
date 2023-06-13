@@ -11,6 +11,8 @@ from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, Inv
 from common import strings, buttons, db
 from random import choice
 
+from common.throttler import Throttler
+
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
@@ -20,6 +22,7 @@ bot = Bot(token=config.API_TOKEN)
 dp = Dispatcher(bot)
 
 relax = False
+throttled_by_id = {}
 
 
 class OneEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
@@ -52,6 +55,11 @@ async def bot_send_captcha(chat_id):
 
 # Results get handler:
 async def bot_send_results(chat_id, is_first_user_hash=False):
+    throttled_by_id.setdefault(chat_id, Throttler())
+    if throttled_by_id[chat_id]():
+        logger.debug("%d throttled" % chat_id)
+        return
+
     if await utils.user_check_logged(chat_id):
         try:
             err_msg, response = await utils.handle_get_results_json(chat_id)
@@ -167,6 +175,11 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
     text = ""
     callback_text = ""
+
+    throttled_by_id.setdefault(chat_id, Throttler())
+    if throttled_by_id[chat_id]():
+        logger.debug("%d throttled" % chat_id)
+        return
 
     try:
         if await utils.user_check_logged(chat_id):
