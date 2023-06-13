@@ -1,20 +1,19 @@
-import aiohttp
-import os
-import logging
 import base64
+import logging
+import os
 import shelve
-
-from asyncpg.exceptions import UniqueViolationError
 from asyncio import TimeoutError as ATimeoutError
 from datetime import datetime
 from hashlib import md5
-from config import db_table_login, db_table_users, EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
-    EGE_LOGIN_URL, db_table_regions, db_table_examsinfo, db_table_stats, proxy_url
-from common.db_worker import DbConnectionPool, DbTable
-from pypika import Column
 from json.decoder import JSONDecodeError
-from common.strings import months
 
+import aiohttp
+from asyncpg.exceptions import UniqueViolationError
+
+from common.db import users_table, examsinfo_table, login_table, stats_table, regions_table
+from common.strings import months
+from config import EGE_URL, EGE_HEADERS, EGE_TOKEN_URL, \
+    EGE_LOGIN_URL, proxy_url
 from mailer import Mailer
 
 logging.basicConfig()
@@ -22,48 +21,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
 
 cached_exam_results_dates = {}
-
-db_conn = DbConnectionPool().conn
-
-users_table = DbTable(db_conn, db_table_users,
-                      (Column("chat_id", "bigint", nullable=False),
-                       Column("region", "int", nullable=False),
-                       Column("notify", "int", nullable=False, default=1),
-                       Column("token", "text", nullable=False),
-                       Column("login_date", "int"),
-                       Column("exams", "int[]", default="{}"),
-                       Column("exams_hash", "text")),
-                      pk_id="chat_id")
-login_table = DbTable(db_conn, db_table_login,
-                      (Column("chat_id", "bigint", nullable=False),
-                       Column("status", "text", nullable=False),
-                       Column("_name", "text"),
-                       Column("region", "int"),
-                       Column("passport", "text"),
-                       Column("captcha_token", "text"),
-                       Column("captcha_answer", "text")),
-                      pk_id="chat_id")
-
-regions_table = DbTable(db_conn, db_table_regions,
-                        (Column("region", "int", nullable=False),
-                         Column("exams", "int[]", default="{}"),
-                         Column("notified_exams", "int[]", default="{}")),
-                        pk_id="region")
-
-examsinfo_table = DbTable(db_conn, db_table_examsinfo,
-                          (Column("exam_id", "int", nullable=False),
-                           Column("title", "text", nullable=False),
-                           Column("exam_date", "date"),
-                           Column("res_date_official", "date"),
-                           Column("res_date_predicted", "date")),
-                          pk_id="exam_id")
-
-stats_table = DbTable(db_conn, db_table_stats,
-                      (Column("user_hash", "text", nullable=False),
-                       Column("first_login_time", "int", nullable=False),
-                       Column("exams", "int[]"),
-                       Column("region", "int")),
-                      pk_id="user_hash")
 
 
 async def table_count():
@@ -127,7 +84,7 @@ async def user_login_start(chat_id):
     })
 
 
-async def user_login_setName(chat_id, name):
+async def user_login_set_name(chat_id, name):
     a = name.split(" ")
     name_merged = md5(''.join(a).lower().replace("ё", "е").replace("й", "и").replace("-", "").encode()).hexdigest()
 
@@ -139,7 +96,7 @@ async def user_login_setName(chat_id, name):
         return True
 
 
-async def user_login_setRegion(chat_id, region):
+async def user_login_set_region(chat_id, region):
     if len(region) == 2 and region.isdigit():
         await login_table.update(chat_id, {
             "status": "passport",
@@ -148,7 +105,7 @@ async def user_login_setRegion(chat_id, region):
         return True
 
 
-async def user_login_setPassport(chat_id, passport):
+async def user_login_set_passport(chat_id, passport):
     if 5 <= len(passport) <= 12 and " " not in passport:
         await login_table.update(chat_id, {
             "status": "captcha",
@@ -157,7 +114,7 @@ async def user_login_setPassport(chat_id, passport):
         return True
 
 
-async def user_login_checkCaptcha(chat_id, text):
+async def user_login_check_captcha(chat_id, text):
     if len(text) == 6 and text.isdigit():
         await login_table.update(chat_id, {
             "status": "login",
@@ -206,14 +163,14 @@ async def examsinfo_update(response):
             })
 
 
-def handle_captchaDelete(chat_id):
+def handle_captcha_delete(chat_id):
     try:
         os.remove("_captcha" + str(chat_id))
     except FileNotFoundError:
         return None
 
 
-async def handle_captchaGet(chat_id):
+async def handle_captcha_get(chat_id):
     try:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
             response = await session.get(EGE_TOKEN_URL, timeout=5, proxy=proxy_url)
@@ -365,7 +322,7 @@ def check_threshold(mark, mark_threshold, title):
 async def check_results_updates(chat_id, response, callback_bot=None, is_user_request=True):
     user = await users_table.get(chat_id)
     if user:
-        # update hash (and exams list) in 'users.db'
+        # update hash (and exam list) in 'users.db'
         old_hash = user["exams_hash"]
         region = user["region"]
 
@@ -404,7 +361,6 @@ async def parse_results_message(response, updates, is_first=False):
     mark_sum = 0
     show_sum = True
 
-    # message = "🔥 *Наблюдается большая нагрузка на сервер. Из-за ограничений Telegram результаты можно запрашивать только раз в минуту. Пожалуйста, делайте запросы реже и подключите уведомления о новых результатах!*\n\n"
     message = ""
 
     if is_first:
@@ -426,12 +382,13 @@ async def parse_results_message(response, updates, is_first=False):
             if is_composition:
                 mark_string = "*Зачёт* ✅" if mark == 1 else "*Незачёт* ❗️"
             else:
-                mark_string = "*" + str(mark) + count_case(mark, title) + check_threshold(mark, mark_threshold, title) + "*"
+                mark_string = "*" + str(mark) + count_case(mark, title) + check_threshold(mark, mark_threshold,
+                                                                                          title) + "*"
                 mark_sum += int(mark)
         elif int(mark):
             mark_string = "*" + str(mark) + count_case(mark, title) + check_threshold(mark,
-                                                                               mark_threshold,
-                                                                               title) + "* _(результат скрыт)_"
+                                                                                      mark_threshold,
+                                                                                      title) + "* _(результат скрыт)_"
             show_sum = False
         else:
             result_date = await get_exam_result_date(exam["ExamId"])

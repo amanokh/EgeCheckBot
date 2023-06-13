@@ -8,7 +8,7 @@ import utils
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.exceptions import MessageNotModified, MessageTextIsEmpty, InvalidQueryID, RetryAfter, \
     MessageIdInvalid, MessageToEditNotFound
-from common import strings, buttons
+from common import strings, buttons, db
 from random import choice
 
 logging.basicConfig()
@@ -22,15 +22,26 @@ dp = Dispatcher(bot)
 relax = False
 
 
+class OneEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    _loop = None
+
+    def __init__(self, set_loop):
+        super().__init__()
+        self._loop = set_loop
+
+    def get_event_loop(self):
+        return self._loop
+
+
 # Captcha handler:
 async def bot_send_captcha(chat_id):
     await bot.send_message(chat_id, strings.login_captcha_prompt, parse_mode="MARKDOWN")
 
-    shelve_result = await utils.handle_captchaGet(chat_id)
+    shelve_result = await utils.handle_captcha_get(chat_id)
     if shelve_result:
         with open("_captcha" + str(chat_id), "rb") as photo:
             await bot.send_photo(chat_id, photo)
-        utils.handle_captchaDelete(chat_id)
+        utils.handle_captcha_delete(chat_id)
     else:
         markup_button = types.InlineKeyboardButton("Запросить капчу заново", callback_data="captcha_retry")
         markup = types.InlineKeyboardMarkup().add(markup_button)
@@ -332,7 +343,7 @@ async def echo(message: types.Message):
     status = await utils.user_get_login_status(chat_id)
 
     if status == '_name':
-        shelve_result = await utils.user_login_setName(chat_id, text)
+        shelve_result = await utils.user_login_set_name(chat_id, text)
 
         if shelve_result:
             await message.answer(strings.login_region, reply_markup=buttons.markup_inline_regions())
@@ -341,7 +352,7 @@ async def echo(message: types.Message):
 
     elif status == 'region':
         if len(text) == 2 and text.isdigit() and int(text) in strings.regions:
-            await utils.user_login_setRegion(chat_id, text)
+            await utils.user_login_set_region(chat_id, text)
             await bot.send_message(chat_id, strings.confirm_region(int(text)), parse_mode="MARKDOWN")
             await send_notify_region_site(chat_id, text)
             await message.answer(strings.login_passport, parse_mode="MARKDOWN")
@@ -349,7 +360,7 @@ async def echo(message: types.Message):
             await message.answer(strings.login_region_incorrect, reply_markup=buttons.markup_inline_regions())
 
     elif status == 'passport':
-        shelve_result = await utils.user_login_setPassport(chat_id, text)
+        shelve_result = await utils.user_login_set_passport(chat_id, text)
 
         if shelve_result:
             await bot_send_captcha(chat_id)
@@ -358,7 +369,7 @@ async def echo(message: types.Message):
 
     elif status == "captcha":
         # Check captcha:
-        shelve_answer = await utils.user_login_checkCaptcha(chat_id, text)
+        shelve_answer = await utils.user_login_check_captcha(chat_id, text)
         if shelve_answer:
             await bot_login_attempt(chat_id)
         else:
@@ -381,7 +392,11 @@ async def echo(message: types.Message):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
+    loop.run_until_complete(db.init_db())
+
     loop.create_task(auto_checker.check_thread_runner(bot))
+
+    asyncio.set_event_loop_policy(OneEventLoopPolicy(loop))
 
     executor.start_polling(dp, skip_updates=True,
                            allowed_updates=types.AllowedUpdates.MESSAGE + types.AllowedUpdates.CALLBACK_QUERY)
