@@ -179,6 +179,7 @@ async def process_callback_results_update(callback_query: types.CallbackQuery):
     throttled_by_id.setdefault(chat_id, Throttler())
     if throttled_by_id[chat_id]():
         logger.debug("%d throttled" % chat_id)
+        await bot.answer_callback_query(callback_query.id)
         return
 
     try:
