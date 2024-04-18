@@ -1,6 +1,6 @@
 import os
 
-API_TOKEN = os.environ.get("TG_API_TOKEN")
+API_TOKEN = os.environ.get("6757783032:AAFVrrzhQKdtGeelz8Wc711DdahU_hwQlW4")
 NOTIFY_TIME = 0
 VERSION_BUILD = "3.2.1_13062023"
 
@@ -9,7 +9,7 @@ relax_mailer = 0.2
 relax_retry_error = 10
 relax_checker = 0.2
 
-admin_ids = list(os.environ.get("ADMIN_CHAT_IDS").split(","))
+admin_ids = list(os.environ.get("Bot_Bot_bon").split(","))
 db_url = os.environ.get("DATABASE_URL")
 
 db_table_users = "users"
