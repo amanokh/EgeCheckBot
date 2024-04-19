@@ -1,6 +1,6 @@
 import os
 
-API_TOKEN = os.environ.get("6757783032:AAFVrrzhQKdtGeelz8Wc711DdahU_hwQlW4")
+API_TOKEN = os.environ.get("https://core.telegram.org/bots/api")
 NOTIFY_TIME = 0
 VERSION_BUILD = "3.2.1_13062023"
 
