@@ -1,10 +1,5 @@
-FROM python:3.11.3
-
-WORKDIR /bot
-ADD requirements.txt /bot
-
-RUN pip3 install -r requirements.txt
-
-ADD . /bot
-
-ENTRYPOINT ["python3", "main.py"]
+FROM python:3.8
+WORKDIR /app
+COPY . /app
+RUN pip install -r requirements.txt
+CMD ["python", "main.py"]
