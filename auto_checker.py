@@ -103,6 +103,7 @@ async def check_thread_runner(bot):
 
             if datetime.now().timestamp() - samples_age > 600 or samples_need_to_regenerate:
                 samples_age = datetime.now().timestamp()
+                exams = await select_near_exams(db_conn)
                 users_samples = await select_random_users_by_exams(db_conn, exams)
 
         else:

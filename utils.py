@@ -155,7 +155,12 @@ async def examsinfo_update(response):
         title = exam["Subject"]
         exam_date = exam["ExamDate"]
 
-        if not await examsinfo_table.get(exam_id):
+        if await examsinfo_table.get(exam_id):
+            await examsinfo_table.update(exam_id, {
+                "title": title,
+                "exam_date": datetime.strptime(exam_date, "%Y-%m-%d")
+            })
+        else:
             await examsinfo_table.insert({
                 "exam_id": exam_id,
                 "title": title,

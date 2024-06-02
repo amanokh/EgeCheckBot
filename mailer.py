@@ -27,7 +27,7 @@ class Mailer:
     async def _send_message(self, chat_id, attempts=5):
         markup_button = types.InlineKeyboardButton("Обновить результаты", callback_data="results_update")
         markup = types.InlineKeyboardMarkup().add(markup_button)
-        message = "⚡️*В вашем регионе доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % self.title.upper()
+        message = "⚡️*Доступны результаты по предмету %s*⚡️\nОбновите, чтобы узнать баллы:" % self.title.upper()
 
         try:
             await self.bot.send_message(chat_id, message, parse_mode="MARKDOWN", reply_markup=markup)
