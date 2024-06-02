@@ -72,7 +72,7 @@ async def bot_send_results(chat_id, is_first_user_hash=False):
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
-            region = utils.user_get_region(chat_id)
+            region = await utils.user_get_region(chat_id)
             await send_notify_region_site(chat_id, region)
             await bot.send_message(chat_id,
                                    text,
@@ -80,7 +80,6 @@ async def bot_send_results(chat_id, is_first_user_hash=False):
                                    reply_markup=buttons.markup_inline_results())
 
             if is_first_user_hash:
-                region = await utils.user_get_region(chat_id)
                 await utils.regions_update_exams(region, response)
                 await utils.examsinfo_update(response)
                 await utils.pass_stats_exams_by_user_hash(is_first_user_hash, response)
@@ -126,11 +125,11 @@ async def clear_user(chat_id):
 
 
 async def send_notify_region_site(chat_id, region):
-    if region == "77":
+    if str(region) == "77":
         await bot.send_message(chat_id, strings.warn_region_mos, parse_mode="MARKDOWN")
-    elif region == "50":
+    elif str(region) == "50":
         await bot.send_message(chat_id, strings.warn_region_mo, parse_mode="MARKDOWN")
-    elif region == "78":
+    elif str(region) == "78":
         await bot.send_message(chat_id, strings.warn_region_spb, parse_mode="MARKDOWN")
 
 
