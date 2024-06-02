@@ -72,6 +72,8 @@ async def bot_send_results(chat_id, is_first_user_hash=False):
             else:  # response is Null
                 text = "Пока результатов в вашем профиле нет.\nПопробуйте обновить позже."
 
+            region = utils.user_get_region(chat_id)
+            await send_notify_region_site(chat_id, region)
             await bot.send_message(chat_id,
                                    text,
                                    parse_mode="MARKDOWN",
