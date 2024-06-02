@@ -13,6 +13,7 @@ dp = Dispatcher(bot)
 @dp.message_handler()
 async def echo(message: types.Message):
     await message.answer(strings.maintenance_msg)
+    logging.info(message.chat.id)
 
 
 if __name__ == '__main__':
